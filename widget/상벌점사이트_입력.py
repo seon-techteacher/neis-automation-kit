@@ -9,6 +9,8 @@
         → 미리보기만 (아무것도 안 넣는다)
   … 넣기 … --go
         → 실제로 넣는다. 사이트는 넣는 즉시 그 학생 담임선생님께 문자를 보낸다
+  … 목록 --quiet
+        → 위젯 입력 창용: 벌점·상점 항목 전부를 RESULT_JSON 으로 (--quiet: 크롬을 앞으로 안 꺼낸다)
 
 - 화면은 사이트의 «학생 개인별 입력»(벌점 card.php / 상점 scard.php) 첫 줄과 같다:
   학번 · 이름 · 항목번호 · (점수: 항목에 범위가 있을 때만) · 지도내용(상세) · 날짜 · 지도교사(로그인한 선생님)
@@ -125,6 +127,11 @@ def cmd_items(tab, a):
     out({"ok": True, "type": a.type, "count": len(its)})
 
 
+def cmd_lists(tab, a):
+    """위젯 입력 창용 — 벌점·상점 항목을 한 번에 JSON 으로."""
+    out({"ok": True, "벌점": items(tab, "벌점"), "상점": items(tab, "상점")})
+
+
 def cmd_student(tab, a):
     hits = find_student(tab, a.student)
     if len(hits) > MANY:
@@ -217,7 +224,7 @@ def cmd_put(tab, a):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["항목", "학생", "넣기"])
+    ap.add_argument("cmd", choices=["항목", "학생", "넣기", "목록"])
     ap.add_argument("--type", choices=list(PAGES), default="벌점")
     ap.add_argument("--student")
     ap.add_argument("--item")
@@ -226,7 +233,12 @@ def main():
     ap.add_argument("--date")
     ap.add_argument("--go", action="store_true")
     ap.add_argument("--fill-only", action="store_true", help="시험용: 칸만 채우고 [입력]은 안 누른다")
+    ap.add_argument("--quiet", action="store_true", help="위젯 입력 창용: 크롬을 앞으로 꺼내지 않는다 (없으면 최소화로 띄운다)")
     a = ap.parse_args()
+    if a.quiet:
+        _ensure = G.W.ensure_chrome
+        G.W.ensure_chrome = lambda site, minimized=False: _ensure(site, True)
+        G.W.to_front_sync = lambda page: None
     if a.cmd in ("학생", "넣기") and not a.student:
         ap.error("--student 가 필요합니다")
     if a.cmd == "넣기" and not a.item:
@@ -240,7 +252,7 @@ def main():
         with sync_playwright() as p:
             tab = open_tab(p)
             try:
-                {"항목": cmd_items, "학생": cmd_student, "넣기": cmd_put}[a.cmd](tab, a)
+                {"항목": cmd_items, "학생": cmd_student, "넣기": cmd_put, "목록": cmd_lists}[a.cmd](tab, a)
             finally:
                 tab.close()
     except Exception as e:

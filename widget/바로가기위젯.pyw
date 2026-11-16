@@ -45,10 +45,11 @@ PORTS = {"neis": 9322, "edufine": 9324}
 BG, INK, LINE = "#fffaf2", "#3b2f25", "#d9ccb8"
 BTNS = [("나이스", "neis", "open", "#1b6fb5"), ("에듀파인", "edufine", "main", "#2f7d4f"),
         ("문서등록대장", "edufine", "open", "#8a5a2b"), ("공람", "edufine", "cnrs", "#6b4fb5"),
-        ("상벌점", "green", "open", "#b5651d"),
+        ("상벌점", "green", "form", "#b5651d"),
         ("복무", "bokmu", "form", "#c2417a")]   # [검수] 단추는 선생님 요청으로 뺐다 (2026-11-16)
 GREEN = HERE / "상벌점사이트_엔진.py"              # 학교 상벌점 사이트 (아이디·비밀번호 로그인)
 GREEN_SETUP = HERE / "상벌점사이트_설정.py"
+GREEN_INPUT = HERE / "상벌점사이트_입력.py"         # [상벌점] 입력 창이 부른다 (목록 · 학생 · 넣기)
 INSPECT = HERE.parent / "edufine_inspect.py"      # 키트의 물품 검사검수 (조회만 / --go 등록)
 BOKMU = HERE.parent / "main_bokmu.py"             # 키트의 복무(근무상황) 상신
 BOKMU_TYPES = ["조퇴", "외출", "지각", "병조퇴", "병외출", "병지각"]
@@ -309,6 +310,7 @@ class Widget:
 
         self.m = tk.Menu(self.root, tearoff=0, font=("Malgun Gothic", 9))
         self.m.add_command(label="인증서 설정 (처음 한 번)", command=self.open_setup)
+        self.m.add_command(label="상벌점 사이트 열기", command=lambda: self.click("green", "open", "상벌점 사이트"))
         self.m.add_command(label="상벌점 설정 (아이디·비밀번호)", command=self.open_green_setup)
         self.prewarm_var = tk.BooleanVar(value=self.prewarm)
         self.m.add_checkbutton(label="미리 열어두기 (빠른 클릭)", variable=self.prewarm_var, command=self.toggle_prewarm)
@@ -431,6 +433,9 @@ class Widget:
             return
         if site == "bokmu":
             self.bokmu_form()
+            return
+        if site == "green" and cmd == "form":
+            self.green_form()
             return
         self.busy = text + " 여는 중"
 
@@ -613,6 +618,237 @@ class Widget:
                 self.root.after(0, self.info, "상신 완료 — %s %s %s~%s\n사유: %s\n\n나이스 개인근무상황관리에서 한 번 확인하세요." % (kind, d, start, end, reason))
             else:
                 self.root.after(0, self.info, "앗, 상신이 안 됐어요.\n\n" + "\n".join(lines[-4:])[:500] + "\n\n(크롬 창이 남아 있으면 거기서 직접 마무리할 수 있어요)")
+        threading.Thread(target=fn, daemon=True).start()
+
+    # ── 상벌점 (학교 상벌점 사이트에 학생 한 명 넣기) ──
+    def green_call(self, args, timeout=240):
+        """상벌점사이트_입력.py 를 크롬을 앞으로 안 꺼내고 돌려 RESULT_JSON 을 돌려준다. 학생 이름은 로그에 남기지 않는다."""
+        t0 = time.time()
+        with self.locks["green"]:
+            p = subprocess.run([str(PY), "-X", "utf8", str(GREEN_INPUT), *args, "--quiet"], capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", env=ENV, cwd=str(HERE), creationflags=NO_WINDOW, timeout=timeout)
+        lines = [ln for ln in ((p.stdout or "") + "\n" + (p.stderr or "")).splitlines() if ln.strip()]
+        res = next((ln[12:] for ln in reversed(lines) if ln.startswith("RESULT_JSON=")), "")
+        try:
+            r = json.loads(res)
+        except Exception:
+            r = {"ok": False, "error": (lines[-1] if lines else "응답 없음")[:200]}
+        log("green " + args[0], ["READY" if r.get("ok") else "FAIL " + str(r.get("error", ""))[:100]], t0)
+        return r
+
+    def green_form(self):
+        tip, fr = self.popup("상벌점 넣기 — 학생을 찾고 항목을 고른 뒤 [넣기]. 넣기 전에 한 번 더 묻습니다")
+        g = tk.Frame(fr, bg=BG)
+        g.pack(padx=12, pady=(0, 6), anchor="w")
+        f = ("Malgun Gothic", 9)
+        st = {"items": None, "students": [], "busy": False}
+        kind = tk.StringVar(value="벌점")
+        v_word = tk.StringVar()
+        v_pick = tk.StringVar()            # 고른 학생의 학번
+        v_point = tk.StringVar()
+        v_memo = tk.StringVar()
+        v_date = tk.StringVar(value=datetime.now().strftime("%Y-%m-%d"))
+        msg = tk.Label(fr, text="항목 목록을 읽는 중… (처음엔 10초쯤)", bg=BG, fg="#8a7a68", font=("Malgun Gothic", 8))
+
+        def lab(r, text):
+            tk.Label(g, text=text, bg=BG, fg=INK, font=f).grid(row=r, column=0, sticky="nw", pady=2)
+
+        # 학생
+        lab(0, "학생")
+        sf = tk.Frame(g, bg=BG)
+        sf.grid(row=0, column=1, sticky="w", padx=(8, 0), pady=2)
+        e_word = tk.Entry(sf, textvariable=v_word, font=f, width=14)
+        e_word.pack(side="left")
+        b_find = tk.Button(sf, text="찾기", font=f, relief="groove", padx=6)
+        b_find.pack(side="left", padx=(4, 0))
+        tk.Label(sf, text="학번 또는 이름", bg=BG, fg="#8a7a68", font=("Malgun Gothic", 8)).pack(side="left", padx=(6, 0))
+        hits = tk.Frame(g, bg=BG)
+        hits.grid(row=1, column=1, sticky="w", padx=(8, 0))
+        # 종류
+        lab(2, "종류")
+        kf = tk.Frame(g, bg=BG)
+        kf.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=2)
+        for k in ("벌점", "상점"):
+            tk.Radiobutton(kf, text=k, variable=kind, value=k, bg=BG, font=f, activebackground=BG).pack(side="left")
+        # 항목
+        lab(3, "항목")
+        lf = tk.Frame(g, bg=BG)
+        lf.grid(row=3, column=1, sticky="w", padx=(8, 0), pady=2)
+        lb = tk.Listbox(lf, font=f, width=52, height=8, exportselection=False, activestyle="none")
+        sb = tk.Scrollbar(lf, command=lb.yview)
+        lb.config(yscrollcommand=sb.set)
+        lb.pack(side="left")
+        sb.pack(side="left", fill="y")
+        # 점수 (범위 항목만)
+        lab(4, "점수")
+        pf = tk.Frame(g, bg=BG)
+        pf.grid(row=4, column=1, sticky="w", padx=(8, 0), pady=2)
+        p_fixed = tk.Label(pf, text="항목을 고르면 정해져요", bg=BG, fg="#8a7a68", font=f)
+        p_fixed.pack(side="left")
+        p_spin = tk.Spinbox(pf, textvariable=v_point, font=f, width=5, from_=1, to=1)
+        lab(5, "지도내용")
+        tk.Entry(g, textvariable=v_memo, font=f, width=40).grid(row=5, column=1, sticky="w", padx=(8, 0), pady=2)
+        # 날짜 — 복무 창과 같은 달력 단추
+        lab(6, "날짜")
+        df = tk.Frame(g, bg=BG)
+        df.grid(row=6, column=1, sticky="w", padx=(8, 0), pady=2)
+        db = tk.Button(df, text=date_label(v_date.get()), font=f, relief="groove", bg="white", cursor="hand2", anchor="w")
+        db.pack(anchor="w")
+        cal = {"box": None}
+
+        def picked(iso):
+            db.config(text=date_label(iso))
+            toggle_cal()
+
+        def toggle_cal():
+            if cal["box"]:
+                cal["box"].destroy(); cal["box"] = None
+            else:
+                cal["box"] = date_picker(df, v_date, BG, picked)
+                cal["box"].pack(anchor="w", pady=(4, 2))
+            self.place_tip(tip)
+        db.config(command=toggle_cal)
+        msg.pack(anchor="w", padx=12)
+
+        def say(text, color="#8a7a68"):
+            if tip.winfo_exists():
+                msg.config(text=text, fg=color)
+
+        def cur_items():
+            return (st["items"] or {}).get(kind.get(), [])
+
+        def fill_items(*_):
+            lb.delete(0, "end")
+            for it in cur_items():
+                rng = ("%d~%d" % (it["point"], it["max"])) if it["max"] else str(it["point"])
+                lb.insert("end", "%3s  %s점  %s" % (it["no"], rng, it["text"]))
+            on_item()
+
+        def chosen_item():
+            sel = lb.curselection()
+            its = cur_items()
+            return its[sel[0]] if sel and sel[0] < len(its) else None
+
+        def on_item(*_):
+            it = chosen_item()
+            p_spin.pack_forget()
+            if not it:
+                p_fixed.config(text="항목을 고르면 정해져요"); p_fixed.pack(side="left"); return
+            if it["max"]:
+                p_fixed.pack_forget()
+                p_spin.config(from_=it["point"], to=it["max"]); v_point.set(str(it["point"]))
+                p_spin.pack(side="left")
+            else:
+                p_fixed.config(text="%d점 (항목이 정한 점수)" % it["point"]); p_fixed.pack(side="left")
+        lb.bind("<<ListboxSelect>>", on_item)
+        kind.trace_add("write", fill_items)
+
+        def show_hits():
+            for w in hits.winfo_children():
+                w.destroy()
+            for h in st["students"]:
+                tk.Radiobutton(hits, text="%s  %s  %s" % (h["hakbun"], h["info"], h["name"]), variable=v_pick, value=h["hakbun"],
+                               bg=BG, font=f, activebackground=BG).pack(anchor="w")
+            if len(st["students"]) == 1:
+                v_pick.set(st["students"][0]["hakbun"])
+            self.place_tip(tip)
+
+        def find(*_):
+            word = v_word.get().strip()
+            if not word or st["busy"]:
+                return
+            st["busy"] = True
+            v_pick.set("")
+            say("학생 찾는 중…")
+
+            def fn():
+                r = self.green_call(["학생", "--student", word])
+                st["busy"] = False
+
+                def done():
+                    if not tip.winfo_exists():
+                        return
+                    if r.get("ok"):
+                        st["students"] = r.get("students", [])
+                        show_hits()
+                        say("%d명 찾았어요 — 맞는 학생을 고르세요" % len(st["students"]) if len(st["students"]) > 1 else "학생을 찾았어요")
+                    else:
+                        st["students"] = []
+                        show_hits()
+                        say("못 찾았어요 — %s" % (("%d명이 걸려요. 더 정확히 적어 주세요" % r["count"]) if r.get("count") else r.get("error", "학번·이름을 확인해 주세요")), "#c0392b")
+                self.root.after(0, done)
+            threading.Thread(target=fn, daemon=True).start()
+        b_find.config(command=find)
+        e_word.bind("<Return>", find)
+        e_word.focus_set()
+
+        def load():
+            r = self.green_call(["목록"])
+
+            def done():
+                if not tip.winfo_exists():
+                    return
+                if r.get("ok"):
+                    st["items"] = {"벌점": r.get("벌점", []), "상점": r.get("상점", [])}
+                    fill_items()
+                    say("항목을 골라 주세요")
+                else:
+                    say("항목을 못 읽었어요 — %s" % r.get("error", ""), "#c0392b")
+            self.root.after(0, done)
+        threading.Thread(target=load, daemon=True).start()
+
+        def submit():
+            stu = next((h for h in st["students"] if h["hakbun"] == v_pick.get()), None)
+            it = chosen_item()
+            d = v_date.get().strip()
+            if not stu:
+                say("학생을 찾아서 골라 주세요", "#c0392b"); return
+            if not it:
+                say("항목을 골라 주세요", "#c0392b"); return
+            point = it["point"]
+            if it["max"]:
+                try:
+                    point = int(v_point.get())
+                except ValueError:
+                    say("점수를 숫자로 골라 주세요", "#c0392b"); return
+                if not it["point"] <= point <= it["max"]:
+                    say("점수는 %d~%d 사이로" % (it["point"], it["max"]), "#c0392b"); return
+            memo = v_memo.get().strip()
+            args = ["넣기", "--student", stu["hakbun"], "--type", kind.get(), "--item", str(it["no"]), "--date", d, "--memo", memo, "--go"]
+            if it["max"]:
+                args += ["--point", str(point)]
+            text = ("이대로 넣을까요?\n\n%s  %s  %s\n%s · %s %s · %d점\n지도내용: %s\n날짜: %s\n\n"
+                    "넣는 즉시 그 학생 담임선생님께 문자가 갑니다." % (stu["hakbun"], stu["info"], stu["name"], kind.get(), it["no"],
+                                                          it["text"][:40], point, memo or "(없음)", d))
+            tip.destroy()
+            self.confirm(text, "넣기", lambda: self.green_go(args, "%s %s %s %d점" % (stu["info"], stu["name"], kind.get(), point)))
+
+        btns = tk.Frame(fr, bg=BG)
+        btns.pack(pady=(4, 10))
+        tk.Button(btns, text="넣기", font=("Malgun Gothic", 9, "bold"), bg="#b5651d", fg="white", relief="flat", padx=12,
+                  command=submit).pack(side="left", padx=4)
+        tk.Button(btns, text="사이트 열기", font=f, relief="flat", padx=8,
+                  command=lambda: (tip.destroy(), self.click("green", "open", "상벌점 사이트"))).pack(side="left", padx=4)
+        tk.Button(btns, text="닫기", font=f, relief="flat", padx=10, command=tip.destroy).pack(side="left", padx=4)
+        self.place_tip(tip)
+
+    def green_go(self, args, label):
+        self.busy = "상벌점 넣는 중"
+
+        def fn():
+            try:
+                r = self.green_call(args)
+            finally:
+                self.busy = None
+            if r.get("verified"):
+                text = "넣었어요 ✅ — %s\n\n사이트 입력 목록에서 들어간 것까지 확인했습니다." % label
+            elif r.get("ok") and r.get("verified") is None:
+                text = "넣었어요 — %s\n\n들어갔는지는 확인하지 못했어요. 사이트 «입력 오류자료 정정»에서 한 번 봐 주세요." % label
+            elif r.get("dry") is False:
+                text = "⚠️ %s\n\n넣기는 눌렀는데 입력 목록에서 확인이 안 됐어요. 두 번 들어갔거나 안 들어갔을 수 있으니\n사이트 «입력 오류자료 정정»에서 직접 봐 주세요 (다시 넣기 전에 꼭)." % label
+            else:
+                text = "앗, 넣지 못했어요 — %s\n\n%s" % (label, r.get("error", "알 수 없는 오류"))
+            self.root.after(0, self.info, text)
         threading.Thread(target=fn, daemon=True).start()
 
     # ── 작은 창 ──
