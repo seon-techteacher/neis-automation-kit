@@ -54,7 +54,7 @@
 6. 아래 입력칸에 **이 문장을 통째로 붙여넣고 엔터**를 칩니다
 
 ```
-https://github.com/workcalmkite-hue/neis-automation-kit 를 지금 열려 있는 이 폴더에 받아줘. 폴더가 비어 있지 않아서 git clone 이 안 되면 git init → git remote add origin → git pull origin main 으로 받아줘. 다 받으면 시작하기.md 를 읽고 거기 적힌 대로 나를 안내해줘.
+https://github.com/seon-techteacher/neis-automation-kit 를 지금 열려 있는 이 폴더에 받아줘. 폴더가 비어 있지 않아서 git clone 이 안 되면 git init → git remote add origin → git pull origin main 으로 받아줘. 다 받으면 시작하기.md 를 읽고 거기 적힌 대로 나를 안내해줘.
 ```
 
 받고 나면 **클로드 앱을 완전히 껐다 다시 켜세요.** (권한 설정은 켤 때 한 번만 읽힙니다)
@@ -85,7 +85,7 @@ https://github.com/workcalmkite-hue/neis-automation-kit 를 지금 열려 있는
 ### 검은 창으로 직접 하고 싶으시면
 
 ```powershell
-git clone https://github.com/workcalmkite-hue/neis-automation-kit.git
+git clone https://github.com/seon-techteacher/neis-automation-kit.git
 cd neis-automation-kit
 .\setup.ps1                                      # 파이썬·패키지·브라우저를 알아서 깝니다
 .\.venv\Scripts\python.exe setup_wizard.py       # 최초 설정 (학년·반·인증서·캘린더)
