@@ -52,7 +52,8 @@ GREEN_SETUP = HERE / "상벌점사이트_설정.py"
 GREEN_INPUT = HERE / "상벌점사이트_입력.py"         # [상벌점] 입력 창이 부른다 (목록 · 학생 · 넣기)
 INSPECT = HERE.parent / "edufine_inspect.py"      # 키트의 물품 검사검수 (조회만 / --go 등록)
 BOKMU = HERE.parent / "main_bokmu.py"             # 키트의 복무(근무상황) 상신
-BOKMU_TYPES = ["조퇴", "외출", "지각", "병조퇴", "병외출", "병지각"]
+BOKMU_TYPES = ["조퇴", "외출", "지각", "병조퇴", "병외출", "병지각", "초근"]
+CHOGUN = HERE.parent / "main_chogun.py"           # 초과근무(초근) 신청 — 개인초과근무관리 (사유 칸 = «하여야 할 일»)
 MUTEX = "neis-edufine-widget"
 SHOW_EVENT, ACK_EVENT = "neis-edufine-widget-show", "neis-edufine-widget-shown"   # 바로가기를 또 누르면 «앞으로 나와» / «나왔어»
 GUARD_EVERY = 5                 # tick(0.4초) 다섯 번마다 = 2초마다 «보이나·화면 안인가·맨 위인가» 확인
@@ -567,6 +568,9 @@ class Widget:
                 v_start.set(round5(datetime.now().strftime("%H:%M"))); v_end.set(end_default)
             elif k in ("외출", "병외출"):
                 t = datetime.now(); v_start.set(round5(t.strftime("%H:%M"))); v_end.set(round5((t + timedelta(hours=1)).strftime("%H:%M")))
+            elif k == "초근":                       # 퇴근 시각부터 두 시간 — 사유 칸에는 «하여야 할 일»을 적는다
+                t = datetime.strptime(end_default, "%H:%M")
+                v_start.set(end_default); v_end.set((t + timedelta(hours=2)).strftime("%H:%M"))
             else:
                 v_start.set(c.get("work_start") or "08:40"); v_end.set(round5(datetime.now().strftime("%H:%M")))
         kind.trace_add("write", on_kind)
@@ -584,8 +588,8 @@ class Widget:
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", d):
             self.say("날짜는 2026-10-16 처럼 적어 주세요", "#c0392b", 5000); return
         if not reason:
-            self.say("사유를 적어 주세요", "#c0392b", 5000); return
-        if not re.fullmatch(r"[\d-]{9,14}", contact):
+            self.say("하여야 할 일을 적어 주세요" if kind == "초근" else "사유를 적어 주세요", "#c0392b", 5000); return
+        if kind != "초근" and not re.fullmatch(r"[\d-]{9,14}", contact):
             self.say("연락처를 010-1234-5678 처럼 적어 주세요 (나이스가 요구해요)", "#c0392b", 6000); return
         if not line:
             self.say("결재선 이름을 적어 주세요 (나이스 개인결재선에 저장한 이름)", "#c0392b", 7000); return
@@ -598,8 +602,12 @@ class Widget:
                 CONFIG.write_text(json.dumps(c, ensure_ascii=False, indent=2), encoding="utf-8")
             except Exception:
                 pass
-        args = [str(PY), "-X", "utf8", str(BOKMU), "--type", kind, "--date", d, "--start", round5(start), "--end", round5(end),
-                "--reason", reason, "--contact", contact, "--approval-line", line]
+        if kind == "초근":
+            args = [str(PY), "-X", "utf8", str(CHOGUN), "--date", d, "--start", round5(start), "--end", round5(end),
+                    "--work", reason, "--approval-line", line]
+        else:
+            args = [str(PY), "-X", "utf8", str(BOKMU), "--type", kind, "--date", d, "--start", round5(start), "--end", round5(end),
+                    "--reason", reason, "--contact", contact, "--approval-line", line]
 
         def fn():
             t0 = time.time()
@@ -608,14 +616,17 @@ class Widget:
                     p = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace",
                                        env=ENV, cwd=str(BOKMU.parent), creationflags=NO_WINDOW, timeout=900)
                 lines = [ln for ln in ((p.stdout or "") + "\n" + (p.stderr or "")).splitlines() if ln.strip()]
-                ok = p.returncode == 0 and any("상신 완료" in ln for ln in lines)
+                ok = p.returncode == 0 and any(("상신 완료" in ln) or (kind == "초근" and ln.startswith("RESULT_JSON=") and '"ok": true' in ln)
+                                               for ln in lines)
                 log("bokmu %s %s %s~%s" % (kind, d, start, end), ["READY" if ok else "FAIL " + " / ".join(lines[-3:])[:200]], t0)
             except Exception as e:
                 ok, lines = False, [str(e)]
             finally:
                 self.busy = None
+            self.root.after(0, self.say, "복무 끝", INK, 3000)      # «상신 중…» 글자를 지운다
             if ok:
-                self.root.after(0, self.info, "상신 완료 — %s %s %s~%s\n사유: %s\n\n나이스 개인근무상황관리에서 한 번 확인하세요." % (kind, d, start, end, reason))
+                self.root.after(0, self.info, "상신 완료 — %s %s %s~%s\n%s: %s\n\n나이스 %s에서 한 번 확인하세요." % (kind, d, start, end, "하여야 할 일" if kind == "초근" else "사유", reason,
+                                                                  "개인초과근무관리" if kind == "초근" else "개인근무상황관리"))
             else:
                 self.root.after(0, self.info, "앗, 상신이 안 됐어요.\n\n" + "\n".join(lines[-4:])[:500] + "\n\n(크롬 창이 남아 있으면 거기서 직접 마무리할 수 있어요)")
         threading.Thread(target=fn, daemon=True).start()
@@ -848,6 +859,7 @@ class Widget:
                 text = "⚠️ %s\n\n넣기는 눌렀는데 입력 목록에서 확인이 안 됐어요. 두 번 들어갔거나 안 들어갔을 수 있으니\n사이트 «입력 오류자료 정정»에서 직접 봐 주세요 (다시 넣기 전에 꼭)." % label
             else:
                 text = "앗, 넣지 못했어요 — %s\n\n%s" % (label, r.get("error", "알 수 없는 오류"))
+            self.root.after(0, self.say, "상벌점 끝", INK, 3000)    # «넣는 중…» 글자를 지운다 (busy 가 풀려도 저절로는 안 지워진다)
             self.root.after(0, self.info, text)
         threading.Thread(target=fn, daemon=True).start()
 
