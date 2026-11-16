@@ -329,15 +329,65 @@ async def neis_logged_in(page, ms=1500):
     return False
 
 
+# ── «이 기기의 다른 앱 및 서비스에 액세스» 미리 허용 ──
+# 위젯용 크롬은 처음 쓰는 프로필이라, 나이스·업무포털이 127.0.0.1 인증서 프로그램에 붙으려 할 때 크롬이 허용을 «묻고» 멈춘다
+# → 인증서 창이 안 뜨고 «5분 안에 로그인이 안 돼 끝냅니다» (2026-11-16 충북 실측). 크롬이 그린 말풍선이라 누를 수 없으니 CDP 로 미리 허용한다.
+LNA_PERMS = ("local-network-access", "local-network", "loopback-network")   # 크롬 판마다 이름이 달라 셋 다 (모르는 이름은 건너뜀)
+
+
+def _origin(u):
+    from urllib.parse import urlsplit
+    sp = urlsplit(u)
+    return "%s://%s" % (sp.scheme, sp.netloc)
+
+
+async def grant_lna_async(browser, urls):
+    try:
+        s = await browser.new_browser_cdp_session()
+    except Exception:
+        return
+    for u in urls:
+        for n in LNA_PERMS:
+            try:
+                await s.send("Browser.setPermission", {"permission": {"name": n}, "setting": "granted", "origin": _origin(u)})
+            except Exception:
+                pass
+
+
+def grant_lna_sync(browser, urls):
+    try:
+        s = browser.new_browser_cdp_session()
+    except Exception:
+        return
+    for u in urls:
+        for n in LNA_PERMS:
+            try:
+                s.send("Browser.setPermission", {"permission": {"name": n}, "setting": "granted", "origin": _origin(u)})
+            except Exception:
+                pass
+
+
 async def neis_login(ctx, page):
     import neis_session as NS
     cfg, pw = cfg_and_pw()
-    from urllib.parse import urlsplit
     try:
-        sp = urlsplit(cfg["neis_url"])
-        await ctx.grant_permissions(["notifications"], origin="%s://%s" % (sp.scheme, sp.netloc))
+        await ctx.grant_permissions(["notifications"], origin=_origin(cfg["neis_url"]))
     except Exception:
         pass
+    if ctx.browser:
+        await grant_lna_async(ctx.browser, [cfg["neis_url"]])
+        # 처음 쓰는 프로필은 허용을 넣어도 «그 뒤 첫 불러오기»에는 안 먹고, 한 번 더 불러와야 인증서 창이 뜬다
+        # (2026-11-16 빈 프로필 실측: 그냥 → 20초 안에 창 안 뜸 / 새로고침 뒤 → 1초). 나이스 화면이 아직 아니면 한 번 열고 다시 불러온다
+        if "neis" not in page.url:
+            step("나이스 처음 여는 중")
+            try:
+                await page.goto(cfg["neis_url"], wait_until="domcontentloaded", timeout=30_000)
+                await page.wait_for_timeout(1500)
+                await grant_lna_async(ctx.browser, [cfg["neis_url"]])
+                await page.reload(wait_until="domcontentloaded")
+                await page.wait_for_timeout(1000)
+            except Exception:
+                pass
     step("나이스 여는 중")
     await NS.login(page, cfg, pw)       # 인증서 고르기·암호·막히면 손 로그인 기다리기까지 키트 그대로
     step("로그인 확인 중")
@@ -413,6 +463,8 @@ def edufine_urls():
 
 def edufine_login(E, ctx, page, urls):
     E.grant_local_network(ctx)
+    if ctx.browser:                          # 붙은 크롬에는 위의 것이 안 먹을 수 있어 CDP 로 한 번 더 (나이스와 같은 이유)
+        grant_lna_sync(ctx.browser, [E.PORTAL, E.KLEF, E.IDP])
     step("로그인 확인 중")
     cfg, pw = cfg_and_pw()
     E.login(page, cfg["cert_name"], pw)   # 업무포털 → 인증서 → 암호. 막히면 손 로그인 기다리기까지 키트 그대로
