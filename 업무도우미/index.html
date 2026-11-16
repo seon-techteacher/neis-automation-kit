@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>업무도우미</title>
+<meta name="author" content="Kang SeongHo">
+<meta name="description" content="교사용 업무 도구함 · © 2026 Kang SeongHo">
+<meta name="theme-color" content="#1f3fae">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="common.css">
+<style>
+/* 좁은 패널: 폭 400px 안팎으로 세워 두고 쓴다. 넓게 열면 왼쪽에 붙는다. */
+body { display: flex; }
+.panel { width: 100%; max-width: 460px; min-height: 100%; background: var(--surface); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+.p-head { display: flex; align-items: center; gap: 6px; padding: 10px 10px 10px 16px; background: var(--accent); color: var(--accent-ink); position: sticky; top: 0; z-index: 5; }
+.p-head b { font-size: 1.05rem; font-weight: 800; letter-spacing: -0.02em; flex: 1; }
+.p-head button { width: 34px; height: 34px; border: 0; border-radius: 8px; background: transparent; color: inherit; display: grid; place-items: center; opacity: .85; }
+.p-head button:hover { background: color-mix(in srgb, var(--accent-ink) 18%, transparent); opacity: 1; }
+.p-head svg { width: 18px; height: 18px; }
+
+.qbox { background: var(--surface); color: var(--ink); font: 15px/1.5 var(--font); }
+.qtabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--line); }
+.qtabs button { border: 0; background: none; padding: 10px 0 8px; font-weight: 700; font-size: .9rem; color: var(--muted); border-bottom: 3px solid transparent; }
+.qtabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+.quick { padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line); }
+.q-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.q-row select { flex: 1; font-weight: 600; }
+.quick textarea { width: 100%; min-height: 110px; }
+.preview { border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; line-height: 1.85; white-space: pre-wrap; word-break: break-all; max-height: 180px; overflow: auto; }
+.issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: .88rem; max-height: 170px; overflow: auto; }
+.issues li { display: flex; gap: 8px; align-items: baseline; }
+.issues q { color: var(--muted); quotes: "‘" "’"; }
+.okline { color: var(--ok); font-weight: 700; font-size: .9rem; }
+.phr { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; }
+.phr li { display: flex; align-items: center; border-bottom: 1px solid var(--line); }
+.phr li button.t { flex: 1; min-width: 0; text-align: left; border: 0; background: none; padding: 8px 4px; white-space: pre-wrap; word-break: break-all; border-radius: 6px; }
+.phr li button.t:hover { background: var(--sunk); }
+.phr li button.x { border: 0; background: none; color: var(--muted); font-size: 1.1rem; padding: 0 6px; }
+.date-out { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; }
+.date-out small { display: block; font-size: .85rem; font-weight: 500; color: var(--muted); }
+.q-row input[type=number] { width: 5em; }
+
+.call { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.call .ic { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex: none; }
+.call .ic svg { width: 20px; height: 20px; }
+.call div { flex: 1; min-width: 0; }
+.call b { display: block; }
+.call small { color: var(--muted); }
+
+.tools { padding: 6px 8px 10px; flex: 1; }
+.grp { font-size: .75rem; font-weight: 800; letter-spacing: .06em; padding: 12px 8px 4px; display: flex; align-items: center; gap: 6px; }
+.grp::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--c); }
+.tool { width: 100%; display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; text-align: left; border: 0; background: none; border-radius: 10px; padding: 7px 8px; }
+.tool:hover { background: var(--sunk); }
+.tool .ic { width: 34px; height: 34px; border-radius: 9px; background: color-mix(in srgb, var(--c) 14%, var(--surface)); color: var(--c); display: grid; place-items: center; }
+.tool .ic svg { width: 19px; height: 19px; }
+.tool b { display: block; font-weight: 700; line-height: 1.3; }
+.tool small { display: block; color: var(--muted); font-size: .82rem; line-height: 1.35; }
+.tool .go { color: var(--muted); font-size: .72rem; font-weight: 700; border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
+.g-record { --c: var(--c-record); } .g-class { --c: var(--c-class); } .g-doc { --c: var(--c-doc); } .g-grade { --c: var(--c-grade); }
+.p-foot { padding: 10px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: .76rem; display: flex; justify-content: space-between; }
+
+.set { padding: 14px 16px 18px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; }
+.set h2 { font-size: 1rem; font-weight: 800; }
+.set label.f { display: flex; flex-direction: column; gap: 5px; font-weight: 700; font-size: .88rem; color: var(--ink-2); }
+.set label.f small { font-weight: 400; color: var(--muted); }
+.seg { display: inline-flex; background: var(--sunk); border-radius: 9px; padding: 3px; gap: 2px; align-self: flex-start; }
+.seg button { border: 0; background: none; padding: 4px 12px; border-radius: 7px; font-size: .86rem; color: var(--muted); font-weight: 700; }
+.seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.about { font-size: .85rem; color: var(--ink-2); display: flex; flex-direction: column; gap: 6px; }
+.changes { font-size: .82rem; color: var(--muted); margin: 0; padding-left: 18px; }
+/* 오른쪽 작업 공간: 창이 넓을 때만 보인다. 도구·유콜은 탭으로 열어 두고 오간다(닫기 전까지 내용 유지). */
+.work { display: none; flex: 1; min-width: 0; flex-direction: column; background: var(--bg); }
+.w-bar { display: flex; align-items: flex-end; gap: 4px; padding: 6px 10px 0; border-bottom: 1px solid var(--line); background: var(--sunk); min-height: 44px; }
+.w-tablist { display: flex; gap: 2px; overflow-x: auto; flex: 1; min-width: 0; }
+.w-tab { display: inline-flex; align-items: center; gap: 4px; border: 1px solid transparent; border-bottom: 0; background: none; border-radius: 9px 9px 0 0; padding: 6px 6px 7px 12px; font-weight: 700; font-size: .88rem; color: var(--muted); white-space: nowrap; }
+.w-tab::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--c, var(--accent)); }
+.w-tab.on { background: var(--surface); border-color: var(--line); color: var(--ink); margin-bottom: -1px; }
+.w-tab .x { border: 0; background: none; color: var(--muted); width: 22px; height: 22px; border-radius: 6px; font-size: 1rem; line-height: 1; padding: 0; }
+.w-tab .x:hover { background: var(--bg); color: var(--ink); }
+.w-bar .btn { margin-bottom: 6px; }
+.w-frames { flex: 1; position: relative; background: var(--surface); }
+.w-frames iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--surface); }
+.w-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--muted); padding: 24px; line-height: 1.8; }
+.w-empty b { color: var(--ink); font-size: 1.05rem; }
+@media (min-width: 900px) {
+  html, body { overflow: hidden; }
+  .panel { width: 400px; flex: none; height: 100vh; overflow-y: auto; }
+  .work { display: flex; height: 100vh; }
+}
+.update-bar { position: fixed; left: 12px; right: 12px; bottom: 12px; max-width: 436px; z-index: 50; display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px 8px 14px; box-shadow: 0 8px 28px rgba(0,0,0,.18); font-weight: 700; font-size: .9rem; }
+</style>
+<script src="version.js"></script>
+<script src="common.js"></script>
+</head>
+<body>
+<div class="panel">
+  <div class="p-head">
+    <b>업무도우미</b>
+    <button id="miniBtn" title="빠른 도구를 다른 창 위에 작게 띄우기" aria-label="미니 창으로 띄우기"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><rect x="12" y="11.5" width="6.5" height="5.5" rx="1"/></svg></button>
+    <button id="setBtn" title="설정" aria-label="설정"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h12M20 17h0"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="17" r="2"/></svg></button>
+  </div>
+
+  <!-- 설정 -->
+  <section class="set" id="setPane" hidden>
+    <h2>설정</h2>
+    <label class="f">유콜 교사 화면 주소
+      <input id="ycUrl" placeholder="https://script.google.com/macros/s/…/exec?role=teacher&k=…">
+      <small>이 PC의 브라우저에만 저장돼요. 주소를 아는 사람은 호출 화면에 들어올 수 있으니 공개된 곳에 올리지 마세요.</small></label>
+    <label class="f">첨부파일 합계 용량 제한 (MB)
+      <input id="targetMB" inputmode="decimal" style="width:6em">
+      <small>‘첨부 용량 맞추기’가 파일을 모두 합쳐 이 용량 아래로 줄여요.</small></label>
+    <div class="f" style="display:flex;flex-direction:column;gap:5px"><span style="font-weight:700;font-size:.88rem;color:var(--ink-2)">화면</span>
+      <div class="seg" id="themeSeg"><button data-v="system">시스템</button><button data-v="light">밝게</button><button data-v="dark">어둡게</button></div></div>
+    <div class="about">
+      <p><b>업무도우미</b> <span id="ver"></span> · © 2026 Kang SeongHo. All rights reserved.</p>
+      <p>비영리 목적이라면 출처(Kang SeongHo)를 밝히고 자유롭게 사용·공유할 수 있어요. 판매, 유료 서비스에 넣기, 수정한 판의 배포는 허락 없이 할 수 없어요.</p>
+      <p class="muted">도구에 넣은 파일, 명단, 점수는 이 PC 안에서만 처리하고 저장하거나 밖으로 보내지 않아요. 유콜(kimju.zip)은 별도 프로그램이에요.</p>
+      <ul class="changes" id="changes"></ul>
+    </div>
+    <button class="btn" id="setClose" style="align-self:flex-start">설정 닫기</button>
+  </section>
+
+  <!-- 빠른 도구 -->
+  <div id="quickHome">
+  <div class="qbox" id="quickBox">
+    <div class="qtabs" id="qtabs">
+      <button data-t="check" class="on">빠른 점검</button><button data-t="bytes">Byte</button><button data-t="phr">문구</button><button data-t="date">날짜</button>
+    </div>
+
+    <div class="quick" data-q="check">
+      <div class="q-row">
+        <select id="qField" aria-label="항목">
+          <option value="교과">교과 세특 · 1,500Byte</option><option value="자율">자율·자치 · 1,500Byte</option><option value="동아리">동아리 · 1,500Byte</option>
+          <option value="진로">진로 · 1,500Byte</option><option value="행동">행동특성 · 900Byte</option><option value="자유학기">자유학기 · 3,000Byte</option>
+        </select>
+        <button class="btn" id="qClear">지우기</button>
+      </div>
+      <textarea id="qText" spellcheck="false" placeholder="세특·행특 문장을 붙여 넣으면 바로 점검해요. 저장하거나 밖으로 보내지 않아요."></textarea>
+      <div class="meter"><div class="track"><span id="qBar"></span></div><b class="num" id="qBytes"></b></div>
+      <div class="preview" id="qPrev" hidden></div>
+      <ul class="issues" id="qIssues"></ul>
+    </div>
+
+    <div class="quick" data-q="bytes" hidden>
+      <textarea id="bText" spellcheck="false" placeholder="붙여 넣으면 나이스 Byte를 세요. (한글 3Byte, 영문·숫자·공백 1Byte. 일람표 점검기와 같은 방식)"></textarea>
+      <div class="q-row num" id="bOut" style="font-weight:700"></div>
+    </div>
+
+    <div class="quick" data-q="phr" hidden>
+      <ul class="phr" id="phrList"></ul>
+      <form class="q-row" id="phrForm" autocomplete="off"><input id="phrIn" class="grow" style="flex:1" placeholder="자주 쓰는 문구 추가 후 Enter" maxlength="300"></form>
+    </div>
+
+    <div class="quick" data-q="date" hidden>
+      <div class="q-row"><input type="date" id="dStart" aria-label="기준일"><span>부터</span><input type="number" id="dN" value="10" aria-label="일수"><span>일 뒤</span></div>
+      <label class="q-row"><input type="checkbox" id="dWeek"> 주말은 빼고 세기 (공휴일은 세요)</label>
+      <div class="date-out num" id="dOut"></div>
+      <div class="q-row"><input type="date" id="dTo" aria-label="비교할 날"><span class="num" id="dDiff"></span></div>
+    </div>
+  </div>
+  </div>
+
+  <div class="call">
+    <span class="ic"><svg viewBox="0 0 24 24"><path d="M18 15.5V11a6 6 0 0 0-12 0v4.5L4.5 18h15z"/><path d="M10 21h4"/></svg></span>
+    <div><b>유콜</b><small>학생을 교무실로 호출</small></div>
+    <button class="btn primary" id="ycOpen">호출 화면 열기</button>
+  </div>
+
+  <div class="tools" id="tools">
+    <div class="grp g-record">생기부</div>
+    <button class="tool g-record" data-open="tools/check.html" data-name="check"><span class="ic"><svg viewBox="0 0 24 24"><path d="M14 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5z"/><path d="M14 3.5v5h5"/><path d="m9 14 2 2 4-4"/></svg></span><span><b>일람표·PDF 점검</b><small>학급 전체를 기재요령 기준으로 점검</small></span><span class="go">큰 창</span></button>
+
+    <div class="grp g-class">학급</div>
+    <button class="tool g-class" data-open="tools/seat.html" data-name="seat"><span class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="3.5" width="16" height="3.5" rx="1"/><rect x="4" y="10.5" width="6" height="4" rx="1"/><rect x="14" y="10.5" width="6" height="4" rx="1"/><rect x="4" y="17.5" width="6" height="3" rx="1"/><rect x="14" y="17.5" width="6" height="3" rx="1"/></svg></span><span><b>자리뽑기</b><small>규칙을 지키며 자리 뽑기, 출력</small></span><span class="go">큰 창</span></button>
+    <button class="tool g-class" data-open="tools/roster.html" data-name="roster"><span class="ic"><svg viewBox="0 0 24 24"><path d="M5 6h9M5 12h14M5 18h6"/><path d="m16 16 2 2 3-4"/></svg></span><span><b>명단 도구</b><small>미제출자 찾기, 이름 가리기, 학생별 안내 문구</small></span><span class="go">큰 창</span></button>
+    <button class="tool g-class" data-open="tools/class.html" data-name="class"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2.5 19.5a5.5 5.5 0 0 1 11 0M14.5 19.5a4.5 4.5 0 0 1 7 -3.6"/></svg></span><span><b>학급 도구</b><small>모둠 편성, 뽑기, 순번표, 상담 시간, 이름표, QR</small></span><span class="go">큰 창</span></button>
+
+    <div class="grp g-doc">문서</div>
+    <button class="tool g-doc" data-open="tools/docs.html#size" data-name="docs"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 4v10M8 10l4 4 4-4"/><path d="M5 19h14"/></svg></span><span><b>첨부 용량 맞추기</b><small id="sizeDesc">합쳐서 5MB 아래로 줄이기</small></span><span class="go">큰 창</span></button>
+    <button class="tool g-doc" data-open="tools/docs.html#pdf" data-name="docs"><span class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="10" height="13" rx="1.5"/><path d="M10 20h8.5a1.5 1.5 0 0 0 1.5-1.5V8"/></svg></span><span><b>PDF 편집</b><small>합치기, 쪽 골라내기, 돌리기, 사진을 PDF로</small></span><span class="go">큰 창</span></button>
+    <button class="tool g-doc" data-open="tools/docs.html#conv" data-name="docs"><span class="ic"><svg viewBox="0 0 24 24"><path d="M6 3.5h8l4 4V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 20z"/><path d="M9 12h6M9 15.5h4"/></svg></span><span><b>문서 바꾸기</b><small>형식 칸에 끌어다 놓으면 바로 변환</small></span><span class="go">큰 창</span></button>
+    <button class="tool g-doc" data-open="tools/image.html" data-name="image"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/></svg></span><span><b>사진 편집</b><small>얼굴·이름 가리기, 자르기, 크기 줄이기</small></span><span class="go">큰 창</span></button>
+
+    <div class="grp g-grade">평가</div>
+    <button class="tool g-grade" data-open="tools/exam.html" data-name="exam"><span class="ic"><svg viewBox="0 0 24 24"><path d="M7 3.5h7l4 4v13H7z"/><path d="M14 3.5v4h4M9.5 12.5l2 2 3.5-4"/></svg></span><span><b>시험지 점검</b><small>원안지 번호·배점·선택지·밑줄·글꼴, 정답 분포</small></span><span class="go">큰 창</span></button>
+    <button class="tool g-grade" data-launch="udesk-hangul:open"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="11" height="16" rx="1.5"/><rect x="16.5" y="4" width="4" height="16" rx="1"/><path d="M6.5 8.5h5M6.5 12h5M6.5 15.5h3"/></svg></span><span><b>시험지 편집 도우미</b><small>한글 옆 버튼 창: 자간, 서식, 상자, 선택지, 기호</small></span><span class="go">한글</span></button>
+    <button class="tool g-grade" data-open="tools/grade.html" data-name="grade"><span class="ic"><svg viewBox="0 0 24 24"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M8.5 8h7M8.5 12h2M13.5 12h2M8.5 16h2M13.5 16h2"/></svg></span><span><b>수행평가 계산</b><small>합산, 반영 비율 환산, 점수 오류 찾기</small></span><span class="go">큰 창</span></button>
+    <button class="tool g-grade" data-open="tools/score.html" data-name="score"><span class="ic"><svg viewBox="0 0 24 24"><path d="M5 19V9M10 19V5M15 19v-7M20 19v-4"/></svg></span><span><b>배점·성취도</b><small>상·중·하 난이도별 배점, 성취도 A~E 분포</small></span><span class="go">큰 창</span></button>
+  </div>
+  <div class="p-foot"><span>© 2026 Kang SeongHo</span><span id="verFoot"></span></div>
+</div>
+
+<main class="work" id="work">
+  <div class="w-bar">
+    <div class="w-tablist" id="wTabs" role="tablist"></div>
+    <button class="btn" id="wPop" hidden title="지금 보고 있는 도구를 따로 큰 창으로 열어요">새 창으로</button>
+  </div>
+  <div class="w-frames" id="wFrames">
+    <div class="w-empty" id="wEmpty"><div><b>왼쪽에서 유콜이나 도구를 누르면 여기에 열려요</b><br>여러 개를 열어 두고 위의 탭으로 오갈 수 있어요.<br>한글 편집 도우미는 한글 옆에 따로 떠요.</div></div>
+  </div>
+</main>
+
+<div class="update-bar" id="updateBar" hidden><span style="flex:1">새 버전이 있어요.</span><button class="btn primary" id="updateNow">적용</button><button class="btn" id="updateLater">나중에</button></div>
+
+<script src="quickcheck.js"></script>
+<script>
+'use strict';
+let S = Settings.load();
+const save = () => Settings.save(S);
+const pad = n => String(n).padStart(2, '0');
+const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
+// 미니 창으로 옮겨도 동작하도록 요소를 미리 잡아 둔다(document에서 다시 찾지 않는다).
+const el = {};
+for (const id of ['quickBox', 'qtabs', 'qField', 'qText', 'qBar', 'qBytes', 'qPrev', 'qIssues', 'qClear', 'bText', 'bOut', 'phrList', 'phrForm', 'phrIn', 'dStart', 'dN', 'dWeek', 'dOut', 'dTo', 'dDiff']) el[id] = $(id);
+
+// ── 빠른 도구 탭 ──
+el.qtabs.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  el.qtabs.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  el.quickBox.querySelectorAll('[data-q]').forEach(p => p.hidden = p.dataset.q !== b.dataset.t);
+});
+
+// ── 빠른 점검 ──
+const SEV = { 3: ['필수', 'm3'], 2: ['확인', 'm2'], 1: ['권장', 'm1'] };
+function highlight(text, issues) {
+  const level = new Array(text.length).fill(0);
+  for (const i of issues) if (i.start >= 0) for (let k = i.start; k < Math.min(i.end, text.length); k++) level[k] = Math.max(level[k], i.sev);
+  let html = '', k = 0;
+  while (k < text.length) {
+    let e = k; while (e < text.length && level[e] === level[k]) e++;
+    const chunk = esc(text.slice(k, e));
+    html += level[k] ? `<mark class="m${level[k]}">${chunk}</mark>` : chunk;
+    k = e;
+  }
+  return html;
+}
+function runCheck() {
+  const text = el.qText.value, field = el.qField.value;
+  const limit = QC.LIMIT[field], n = QC.bytes(text.trim());
+  el.qBar.style.width = Math.min(100, n / limit * 100) + '%';
+  el.qBar.className = n > limit ? 'over' : n > limit * 0.9 ? 'near' : '';
+  el.qBytes.textContent = `${n.toLocaleString()} / ${limit.toLocaleString()} Byte`;
+  const issues = QC.check(text, field);
+  el.qPrev.hidden = !issues.some(i => i.start >= 0);
+  el.qPrev.innerHTML = el.qPrev.hidden ? '' : highlight(text, issues);
+  el.qIssues.innerHTML = !text.trim() ? '' : issues.length
+    ? issues.map(i => `<li><span class="tag ${SEV[i.sev][1]}">${SEV[i.sev][0]}</span><span>${esc(i.msg)}${i.start >= 0 ? ` <q>${esc(text.slice(i.start, i.end))}</q>` : ''}</span></li>`).join('')
+    : '<li class="okline">점검할 부분을 찾지 못했어요.</li>';
+}
+el.qText.addEventListener('input', runCheck);
+el.qField.addEventListener('change', () => { S.field = el.qField.value; save(); runCheck(); });
+el.qClear.addEventListener('click', () => { el.qText.value = ''; runCheck(); el.qText.focus(); });
+el.qField.value = S.field;
+
+// ── Byte ──
+function runBytes() {
+  const t = el.bText.value, n = QC.bytes(t.trim());
+  el.bOut.innerHTML = `<span>${n.toLocaleString()} Byte</span><span class="muted">글자 ${[...t].length.toLocaleString()}자 (공백 빼고 ${[...t.replace(/\s/g, '')].length.toLocaleString()}자)</span>`;
+}
+el.bText.addEventListener('input', runBytes);
+
+// ── 문구 ──
+function renderPhr() {
+  el.phrList.innerHTML = S.phrases.length ? S.phrases.map((p, i) => `<li><button class="t" data-i="${i}" title="눌러서 복사">${esc(p)}</button><button class="x" data-x="${i}" aria-label="지우기">×</button></li>`).join('')
+    : '<li class="muted small" style="padding:6px 4px">내선번호, 안내 문장처럼 자주 쓰는 글을 넣어 두면 눌러서 바로 복사해요.</li>';
+}
+el.phrList.addEventListener('click', e => {
+  const x = e.target.closest('[data-x]');
+  if (x) { S.phrases.splice(+x.dataset.x, 1); save(); renderPhr(); return; }
+  const t = e.target.closest('[data-i]'); if (t) copyText(S.phrases[+t.dataset.i]);
+});
+el.phrForm.addEventListener('submit', e => { e.preventDefault(); const v = el.phrIn.value.trim(); if (!v) return; S.phrases.push(v); save(); el.phrIn.value = ''; renderPhr(); });
+
+// ── 날짜 ──
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const fmtDay = d => `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`;
+function runDate() {
+  const s = el.dStart.value ? new Date(el.dStart.value + 'T00:00') : null;
+  if (!s) { el.dOut.textContent = ''; return; }
+  const n = Math.trunc(+el.dN.value || 0), d = new Date(s);
+  if (el.dWeek.checked) { let left = Math.abs(n), step = n < 0 ? -1 : 1; while (left > 0) { d.setDate(d.getDate() + step); if (d.getDay() % 6 !== 0) left--; } }
+  else d.setDate(d.getDate() + n);
+  el.dOut.innerHTML = `${fmtDay(d)}<small>${fmtDay(s)}부터 ${el.dWeek.checked ? '평일 ' : ''}${n}일 뒤</small>`;
+  if (el.dTo.value) {
+    const diff = Math.round((new Date(el.dTo.value + 'T00:00') - s) / 86400000);
+    el.dDiff.textContent = diff === 0 ? '같은 날' : diff > 0 ? `기준일에서 ${diff}일 뒤 (${Math.floor(diff / 7)}주 ${diff % 7}일)` : `기준일보다 ${-diff}일 전`;
+  } else el.dDiff.textContent = '← 날짜를 고르면 며칠 차이인지 알려 줘요';
+}
+for (const k of ['dStart', 'dN', 'dWeek', 'dTo']) el[k].addEventListener('input', runDate);
+el.dStart.value = iso(new Date());
+
+// ── 미니 창 (항상 위) ──
+$('miniBtn').addEventListener('click', async () => {
+  if (!('documentPictureInPicture' in window)) { toast('이 브라우저에서는 미니 창을 쓸 수 없어요. Edge나 크롬 최신 버전에서 돼요.'); return; }
+  if (documentPictureInPicture.window) { documentPictureInPicture.window.close(); return; }
+  try {
+    const pip = await documentPictureInPicture.requestWindow({ width: 400, height: 520 });
+    for (const sheet of document.styleSheets) {
+      if (sheet.href) { const l = pip.document.createElement('link'); l.rel = 'stylesheet'; l.href = sheet.href; pip.document.head.appendChild(l); }
+      else if (sheet.ownerNode) pip.document.head.appendChild(sheet.ownerNode.cloneNode(true));
+    }
+    applyTheme(S.theme, pip.document);
+    pip.document.title = '업무도우미 빠른 도구';
+    pip.document.body.style.display = 'block';
+    pip.document.body.style.background = 'var(--surface)';
+    pip.document.body.appendChild(el.quickBox);
+    pip.addEventListener('pagehide', () => $('quickHome').appendChild(el.quickBox));
+  } catch (err) { toast('미니 창을 열지 못했어요.'); }
+});
+
+// ── 유콜과 도구 열기 ──
+const validYoucall = u => /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec(\?.*)?$/.test(u);
+function openWin(url, name, w = 1280, h = 860) {
+  const win = window.open(url, 'udesk-' + name, `width=${w},height=${h}`);
+  if (!win) toast('창이 막혔어요. 브라우저 주소창 옆의 팝업 차단을 풀어 주세요.');
+  else win.focus();
+}
+// 창이 넓으면 오른쪽 작업 공간에 탭으로 열고, 좁으면 예전처럼 새 창으로 연다.
+const wide = matchMedia('(min-width: 900px)');
+const opened = new Map(); // 이름 → { url, frame, tab }
+let activeName = '';
+function showTool(name) {
+  activeName = name;
+  for (const [n, t] of opened) { t.frame.hidden = n !== name; t.tab.classList.toggle('on', n === name); t.tab.setAttribute('aria-selected', n === name); }
+  $('wEmpty').hidden = opened.size > 0; $('wPop').hidden = !opened.size;
+  const t = opened.get(name); if (t) t.tab.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+}
+function closeTool(name) {
+  const t = opened.get(name); if (!t) return;
+  t.frame.remove(); t.tab.remove(); opened.delete(name);
+  showTool(name === activeName ? ([...opened.keys()].pop() || '') : activeName);
+}
+function openTool(url, name, title, color) {
+  if (!wide.matches) { openWin(url, name, name === 'youcall' ? 1100 : 1280, name === 'youcall' ? 800 : 860); return; }
+  let t = opened.get(name);
+  if (!t) {
+    const frame = document.createElement('iframe');
+    frame.title = title; frame.allow = 'clipboard-read; clipboard-write; autoplay; fullscreen'; frame.allowFullscreen = true;
+    frame.src = url; $('wFrames').appendChild(frame);
+    const tab = document.createElement('div');
+    tab.className = 'w-tab'; tab.setAttribute('role', 'tab'); tab.style.setProperty('--c', color);
+    tab.innerHTML = `<span class="lbl"></span><button class="x" aria-label="닫기" title="닫기">×</button>`;
+    tab.addEventListener('click', e => { if (e.target.closest('.x')) closeTool(name); else showTool(name); });
+    $('wTabs').appendChild(tab);
+    t = { url, frame, tab }; opened.set(name, t);
+  } else if (t.url !== url) { t.url = url; t.frame.src = url; }
+  t.tab.querySelector('.lbl').textContent = title;
+  showTool(name);
+}
+$('wPop').addEventListener('click', () => {
+  const t = opened.get(activeName); if (!t) return;
+  openWin(t.url, activeName, activeName === 'youcall' ? 1100 : 1280, activeName === 'youcall' ? 800 : 860);
+  closeTool(activeName); // 같은 화면이 두 곳에서 돌지 않게 한다(유콜 호출이 겹치지 않게).
+});
+const markGo = () => document.querySelectorAll('.tool[data-open] .go').forEach(g => g.textContent = wide.matches ? '옆에' : '큰 창');
+wide.addEventListener('change', markGo); markGo();
+
+$('ycOpen').addEventListener('click', () => {
+  if (!S.youcallUrl) { toggleSet(true); $('ycUrl').focus(); toast('유콜 교사 화면 주소를 먼저 넣어 주세요.'); return; }
+  openTool(S.youcallUrl, 'youcall', '유콜', 'var(--accent)');
+});
+$('tools').addEventListener('click', e => {
+  const b = e.target.closest('[data-open]'); if (!b) return;
+  openTool(b.dataset.open, b.dataset.name, b.querySelector('b').textContent, getComputedStyle(b).getPropertyValue('--c'));
+});
+// PC 프로그램(한글 옆 편집 도우미)은 'udesk-hangul:' 주소로 연다. 이 PC에 한 번 등록해 두어야 한다.
+$('tools').addEventListener('click', e => {
+  const b = e.target.closest('[data-launch]'); if (!b) return;
+  let left = false; const onBlur = () => { left = true; };
+  window.addEventListener('blur', onBlur, { once: true });
+  const a = document.createElement('a'); a.href = b.dataset.launch; document.body.appendChild(a); a.click(); a.remove();
+  toast('한글 옆에 편집 도우미 창을 여는 중이에요.');
+  setTimeout(() => { window.removeEventListener('blur', onBlur); if (!left) toast("창이 안 뜨면 '시험지 점검' 화면 아래 '편집 도우미 받기'로 받아 '편집 도우미 버튼 연결.cmd'를 한 번 실행해 주세요."); }, 2500);
+});
+
+// ── 설정 ──
+function toggleSet(on) { $('setPane').hidden = on === undefined ? !$('setPane').hidden : !on; if (!$('setPane').hidden) $('setPane').scrollIntoView({ block: 'start' }); }
+$('setBtn').addEventListener('click', () => toggleSet());
+$('setClose').addEventListener('click', () => toggleSet(false));
+$('ycUrl').addEventListener('change', e => {
+  const v = e.target.value.trim();
+  if (v && !validYoucall(v)) { toast('유콜 웹앱 주소(https://script.google.com/macros/s/…/exec…)가 아닌 것 같아요.'); e.target.value = S.youcallUrl; return; }
+  S.youcallUrl = v; save(); toast(v ? '유콜 주소를 저장했어요.' : '유콜 주소를 지웠어요.');
+});
+$('targetMB').addEventListener('change', e => {
+  const v = parseFloat(e.target.value);
+  if (!(v > 0 && v <= 500)) { toast('0보다 큰 숫자로 넣어 주세요.'); e.target.value = S.targetMB; return; }
+  S.targetMB = v; save(); renderSet(); toast(`합계 ${v}MB로 맞출게요.`);
+});
+$('themeSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.theme = b.dataset.v; save(); applyTheme(S.theme); renderSet(); });
+function renderSet() {
+  $('ycUrl').value = S.youcallUrl; $('targetMB').value = S.targetMB;
+  $('themeSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === S.theme));
+  $('sizeDesc').textContent = `합쳐서 ${S.targetMB}MB 아래로 줄이기`;
+  $('ver').textContent = 'v' + APP_VERSION.version; $('verFoot').textContent = 'v' + APP_VERSION.version;
+  $('changes').innerHTML = APP_VERSION.changes[0].items.map(i => `<li>${esc(i)}</li>`).join('');
+}
+
+// ── 업데이트 안내 (웹 주소로 열었을 때만) ──
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    const offer = w => { $('updateBar').hidden = false; $('updateNow').onclick = () => w.postMessage('skipWaiting'); };
+    if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
+    reg.addEventListener('updatefound', () => { const w = reg.installing; w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) offer(w); }); });
+    setInterval(() => reg.update(), 30 * 60000);
+  }).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded) { reloaded = true; location.reload(); } });
+}
+$('updateLater').addEventListener('click', () => { $('updateBar').hidden = true; });
+
+renderSet(); renderPhr(); runCheck(); runBytes(); runDate();
+</script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>배점·성취도 · 업무도우미</title>
+<meta name="author" content="Kang SeongHo">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../common.css">
+<style>
+.win { --c: var(--c-grade); }
+.opts { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.opts label { display: inline-flex; align-items: center; gap: 6px; }
+.opts input { width: 6em; }
+.combos { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.combo { border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+.combo b { color: var(--c); }
+.big { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.03em; }
+.big.bad { color: var(--bad); } .big.ok { color: var(--ok); }
+.rows { display: flex; flex-direction: column; gap: 6px; max-width: 420px; }
+.rows .r { display: flex; align-items: center; gap: 8px; }
+.rows input { width: 5em; text-align: right; }
+.rows .x { border: 0; background: none; color: var(--muted); font-size: 1.1rem; }
+.dist { display: flex; flex-direction: column; gap: 6px; max-width: 640px; }
+.dist .d { display: grid; grid-template-columns: 2em 1fr 9em; gap: 10px; align-items: center; }
+.dist .d b { font-size: 1.1rem; }
+.dist .bar { height: 22px; border-radius: 5px; background: var(--sunk); overflow: hidden; }
+.dist .bar span { display: block; height: 100%; background: var(--c); border-radius: 5px; }
+.cuts input { width: 4.4em; text-align: right; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.stats div { font-size: .85rem; color: var(--muted); }
+.stats b { display: block; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.03em; color: var(--ink); }
+</style>
+<script src="../common.js"></script>
+</head>
+<body>
+<div class="win">
+  <header class="w-head">
+    <h1>배점·성취도</h1>
+    <nav class="w-tabs" id="tabs"><button data-tab="pts" class="on">배점 산출</button><button data-tab="dist">성취도 분포</button></nav>
+    <span class="local">점수는 저장하지 않아요</span>
+  </header>
+
+  <!-- 배점 산출 -->
+  <section class="w-body" data-pane="pts">
+    <h2>난이도별 배점 만들기</h2>
+    <p class="muted">상·중·하 문항 수를 넣으면 소수점 한 자리 배점으로 총점이 딱 맞는 안을 만들어 줘요. 어려운 문항일수록 점수가 높고, 남는 0.1점은 어려운 문항부터 하나씩 더해요.</p>
+    <div class="opts">
+      <label>상 <input id="nH" inputmode="numeric" value="6"> 문항</label>
+      <label>중 <input id="nM" inputmode="numeric" value="14"> 문항</label>
+      <label>하 <input id="nL" inputmode="numeric" value="6"> 문항</label>
+      <label>총점 <input id="aT" inputmode="decimal" value="100"></label>
+    </div>
+    <label class="field"><span>문항 순서대로 난이도 (선택)</span><input id="seq" placeholder="예: 하 중 중 상 중 하 … 를 넣으면 문항 수를 세고, 문항별 배점표를 만들어 줘요" autocomplete="off"></label>
+    <div class="muted" id="aInfo"></div>
+    <div class="combos" id="aOut"></div>
+    <div id="perItem" hidden>
+      <div class="row"><h2 class="grow">문항별 배점</h2><button class="btn primary" id="copyItems">문항별 배점 복사 (엑셀용)</button></div>
+      <div class="tbl-wrap"><table id="itemTbl"></table></div>
+    </div>
+
+    <h2 style="margin-top:14px">내 배점표 합계 확인</h2>
+    <div class="rows" id="bRows"></div>
+    <div class="row"><button class="btn" id="bAdd">줄 추가</button><span class="big num" id="bSum"></span></div>
+  </section>
+
+  <!-- 성취도 분포 -->
+  <section class="w-body" data-pane="dist" hidden>
+    <p class="muted">점수를 한 줄에 하나씩 붙여 넣으세요. 엑셀의 점수 칸을 그대로 복사하면 돼요. 숫자가 아닌 칸은 건너뛰어요.</p>
+    <div class="cols">
+      <label class="field"><span>점수</span><textarea id="dIn" spellcheck="false" placeholder="92&#10;87.5&#10;74"></textarea></label>
+      <div class="field"><span>기준 점수 (이상)</span>
+        <div class="row"><div class="seg" id="dMode" style="display:inline-flex;background:var(--sunk);border-radius:9px;padding:3px;gap:2px">
+          <button class="btn" data-m="5" style="border:0">5단계 (A~E)</button><button class="btn" data-m="3" style="border:0">3단계 (A~C)</button></div></div>
+        <div class="opts cuts" id="dCuts"></div>
+        <p class="muted small">처음 값은 성취평가에서 흔히 쓰는 90·80·70·60점(3단계는 80·60점)이에요. 과목의 분할점수가 다르면 고쳐 주세요.</p>
+        <div class="stats" id="dStats"></div>
+        <div class="dist" id="dOut"></div>
+        <div class="row"><button class="btn primary" id="dCopy">분포 복사</button></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+'use strict';
+tabs($('tabs'));
+
+// ── 난이도별 배점 ── 0.1점 단위라 모두 10배 한 정수로 계산한다.
+// 난이도 사이 점수 차이(g)마다 한 안: 중 = m, 상 = m+g, 하 = m-g. 총점에서 남는 r(0.1점 r개)은 상 → 중 → 하 차례로 한 문항에 0.1점씩 더한다.
+const LV = ['상', '중', '하'];
+let plans = [], pick = -1, seqList = [];
+const f1 = v => (v / 10).toFixed(1);
+function readSeq() {
+  const s = $('seq').value.replace(/[^상중하]/g, '');
+  seqList = [...s];
+  if (seqList.length) { $('nH').value = seqList.filter(x => x === '상').length; $('nM').value = seqList.filter(x => x === '중').length; $('nL').value = seqList.filter(x => x === '하').length; }
+}
+function makePlans() {
+  const n = [+$('nH').value || 0, +$('nM').value || 0, +$('nL').value || 0].map(v => Math.max(0, Math.floor(v)));
+  const N = n[0] + n[1] + n[2], T = Math.round(parseFloat($('aT').value) * 10);
+  const out = [];
+  if (!(N > 0) || !(T > 0)) return { n, N, T, out };
+  for (let g = 1; g <= 10; g++) {
+    const m = Math.floor((T - g * (n[0] - n[2])) / N), r = T - (N * m + g * (n[0] - n[2]));
+    const base = [m + g, m, m - g];
+    if (base.some((b, i) => n[i] && b < 1)) continue;
+    const bump = [0, 0, 0]; let left = r;
+    for (let i = 0; i < 3; i++) { bump[i] = Math.min(n[i], left); left -= bump[i]; }
+    if (left) continue;
+    // 아래 난이도에 0.1점을 더한 문항이 위 난이도 기본 점수와 같아지는지
+    const overlap = (bump[1] && n[0] && base[1] + 1 >= base[0]) || (bump[2] && n[1] && base[2] + 1 >= base[1]);
+    out.push({ g, base, bump, overlap });
+  }
+  return { n, N, T, out };
+}
+function combos() {
+  readSeq();
+  const { n, N, T, out } = makePlans(); plans = out;
+  const info = $('aInfo'), box = $('aOut');
+  if (!(N > 0) || !(T > 0)) { info.textContent = '상·중·하 문항 수와 총점을 넣어 주세요.'; box.innerHTML = ''; $('perItem').hidden = true; return; }
+  info.textContent = `${N}문항 · 총점 ${f1(T)}점 · 평균 ${(T / 10 / N).toFixed(2)}점. 난이도 사이 점수 차이별로 ${plans.length}가지 안이에요. 눌러서 고르세요.`;
+  if (pick >= plans.length) pick = -1;
+  box.innerHTML = plans.map((p, k) => {
+    const lines = [0, 1, 2].filter(i => n[i]).map(i => {
+      const plain = n[i] - p.bump[i];
+      const parts = [plain ? `${f1(p.base[i])}점 × ${plain}` : '', p.bump[i] ? `${f1(p.base[i] + 1)}점 × ${p.bump[i]}` : ''].filter(Boolean).join(', ');
+      return `<div><b>${LV[i]}</b> ${parts}</div>`;
+    }).join('');
+    const sum = [0, 1, 2].reduce((s, i) => s + n[i] * p.base[i] + p.bump[i], 0);
+    return `<button class="combo num" data-k="${k}" style="text-align:left;background:${k === pick ? 'var(--accent-soft)' : 'var(--surface)'};border-color:${k === pick ? 'var(--c)' : 'var(--line)'}">
+      <div class="small muted">차이 ${f1(p.g)}점${p.bump.some(Boolean) ? '' : ' · 같은 난이도는 모두 같은 점수'}</div>${lines}
+      <div class="small">합계 ${f1(sum)}점${p.overlap ? ' · <span style="color:var(--warn)">난이도 사이 점수가 겹쳐요</span>' : ''}</div></button>`;
+  }).join('') || '<p class="muted">만들 수 있는 안이 없어요. 문항 수나 총점을 확인해 주세요.</p>';
+  renderItems();
+}
+// 문항별 배점: 같은 난이도 안에서 0.1점 더한 문항은 뒤쪽 문항으로 둔다.
+function itemScores(p) {
+  const left = [...p.bump], cnt = LV.map(l => seqList.filter(x => x === l).length), seen = [0, 0, 0];
+  return seqList.map(l => { const i = LV.indexOf(l); seen[i]++; const plus = seen[i] > cnt[i] - p.bump[i] ? 1 : 0; return p.base[i] + plus; });
+}
+function renderItems() {
+  const p = plans[pick];
+  $('perItem').hidden = !(p && seqList.length);
+  if ($('perItem').hidden) return;
+  const sc = itemScores(p);
+  $('itemTbl').innerHTML = '<tr><th>문항</th><th>난이도</th><th class="r">배점</th></tr>' + seqList.map((l, i) => `<tr><td class="num">${i + 1}</td><td>${l}</td><td class="r num">${f1(sc[i])}</td></tr>`).join('') +
+    `<tr><td></td><td><b>합계</b></td><td class="r num"><b>${f1(sc.reduce((a, b) => a + b, 0))}</b></td></tr>`;
+}
+$('aOut').addEventListener('click', e => {
+  const b = e.target.closest('[data-k]'); if (!b) return;
+  pick = +b.dataset.k; combos();
+  const p = plans[pick];
+  rows = [0, 1, 2].flatMap(i => [[(+[$('nH'), $('nM'), $('nL')][i].value || 0) - p.bump[i], f1(p.base[i])], [p.bump[i], f1(p.base[i] + 1)]]).filter(r => r[0] > 0);
+  renderRows();
+  if (!seqList.length) toast('아래 ‘내 배점표 합계 확인’에 넣었어요. 문항 순서대로 난이도를 넣으면 문항별 배점표도 만들어요.');
+});
+$('copyItems').addEventListener('click', () => {
+  const p = plans[pick]; if (!p) return; const sc = itemScores(p);
+  copyText(['문항\t난이도\t배점', ...seqList.map((l, i) => `${i + 1}\t${l}\t${f1(sc[i])}`)].join('\n'));
+});
+for (const id of ['nH', 'nM', 'nL', 'aT']) $(id).addEventListener('input', () => { pick = -1; combos(); });
+$('seq').addEventListener('input', () => { pick = -1; combos(); });
+
+// ── 내 배점표 ──
+let rows = [[10, 3], [10, 4], [5, 5]];
+function renderRows() {
+  $('bRows').innerHTML = rows.map((r, i) => `<div class="r"><input data-i="${i}" data-k="0" inputmode="numeric" value="${r[0]}" aria-label="문항 수"> 문항 × <input data-i="${i}" data-k="1" inputmode="decimal" value="${r[1]}" aria-label="배점"> 점 <button class="x" data-del="${i}" aria-label="줄 지우기">×</button></div>`).join('');
+  sumRows();
+}
+function sumRows() {
+  const n = rows.reduce((s, r) => s + (+r[0] || 0), 0), t = Math.round(rows.reduce((s, r) => s + (+r[0] || 0) * (+r[1] || 0), 0) * 10) / 10;
+  const T = parseFloat($('aT').value) || 100, el = $('bSum');
+  el.textContent = `${n}문항 · ${t}점` + (t === T ? ' (총점과 같아요)' : ` (총점 ${T}점과 ${Math.round(Math.abs(T - t) * 10) / 10}점 차이)`);
+  el.className = 'big num ' + (t === T ? 'ok' : 'bad');
+}
+$('bRows').addEventListener('input', e => { const t = e.target; if (t.dataset.i === undefined) return; rows[+t.dataset.i][+t.dataset.k] = t.value; sumRows(); });
+$('bRows').addEventListener('click', e => { const d = e.target.closest('[data-del]'); if (d) { rows.splice(+d.dataset.del, 1); renderRows(); } });
+$('bAdd').addEventListener('click', () => { rows.push([1, 4]); renderRows(); });
+$('aT').addEventListener('input', sumRows);
+
+// ── 성취도 분포 ──
+let mode = 5, cuts = { 5: [90, 80, 70, 60], 3: [80, 60] }, dLast = '';
+function renderCuts() {
+  $('dMode').querySelectorAll('button').forEach(b => { const on = +b.dataset.m === mode; b.style.background = on ? 'var(--surface)' : 'transparent'; b.style.color = on ? 'var(--ink)' : 'var(--muted)'; });
+  $('dCuts').innerHTML = cuts[mode].map((c, i) => `<label>${'ABCDE'[i]} <input data-i="${i}" inputmode="decimal" value="${c}"> 점 이상</label>`).join('') + `<span class="muted">그 아래는 ${'ABCDE'[cuts[mode].length]}</span>`;
+}
+function dist() {
+  const scores = $('dIn').value.split(/[\n\t]+/).map(s => s.trim()).filter(s => s !== '' && !isNaN(+s)).map(Number);
+  const cs = cuts[mode].map(Number), labels = 'ABCDE'.slice(0, cs.length + 1).split(''), cnt = labels.map(() => 0);
+  for (const s of scores) { let i = cs.findIndex(c => s >= c); if (i < 0) i = cs.length; cnt[i]++; }
+  const n = scores.length, avg = n ? scores.reduce((a, b) => a + b, 0) / n : 0, sd = n ? Math.sqrt(scores.reduce((a, b) => a + (b - avg) ** 2, 0) / n) : 0;
+  $('dStats').innerHTML = n ? `<div>인원<b class="num">${n}명</b></div><div>평균<b class="num">${avg.toFixed(1)}</b></div><div>표준편차<b class="num">${sd.toFixed(1)}</b></div><div>최고<b class="num">${Math.max(...scores)}</b></div><div>최저<b class="num">${Math.min(...scores)}</b></div>` : '';
+  const pct = k => n ? (k / n * 100).toFixed(1) : '0.0';
+  $('dOut').innerHTML = n ? labels.map((l, i) => `<div class="d"><b>${l}</b><div class="bar"><span style="width:${pct(cnt[i])}%"></span></div><span class="num">${cnt[i]}명 (${pct(cnt[i])}%)</span></div>`).join('') : '';
+  dLast = n ? ['성취도\t인원\t비율(%)', ...labels.map((l, i) => `${l}\t${cnt[i]}\t${pct(cnt[i])}`), `계\t${n}\t100.0`, `평균\t${avg.toFixed(1)}`, `표준편차\t${sd.toFixed(1)}`].join('\n') : '';
+}
+$('dIn').addEventListener('input', dist);
+$('dMode').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; mode = +b.dataset.m; renderCuts(); dist(); });
+$('dCuts').addEventListener('input', e => { if (e.target.dataset.i === undefined) return; cuts[mode][+e.target.dataset.i] = e.target.value; dist(); });
+$('dCopy').addEventListener('click', () => dLast ? copyText(dLast) : toast('점수를 먼저 넣어 주세요.'));
+
+combos(); renderRows(); renderCuts(); dist();
+</script>
+</body>
+</html>

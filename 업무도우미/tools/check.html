@@ -1,0 +1,1344 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>중학교 생기부 점검기</title>
+<meta name="author" content="Kang SeongHo">
+<script src="../lib/xlsx.full.min.js"></script>
+<script src="../lib/pdf.min.js"></script>
+<script src="../lib/jszip.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600&display=swap">
+<style>
+/* 디자인 방향: 도구(설정·명단)는 조용한 책상, 점검 대상인 학생부 본문은 종이 한 장.
+   본문은 명조, 표시는 형광펜, 점검 이유는 빨간 펜 메모처럼 보이게 한다. */
+:root {
+  --desk: #e8ecf0; --paper: #ffffff; --ink: #1e2733; --muted: #5f6b7a; --rule: #c9d1db;
+  --form: #34506f;      /* 학생부 서식 괘선과 머리칸 */
+  --pen: #b8322a;       /* 빨간 펜 메모 */
+  --hl3: #ff9d9d; --hl2: #ffc875; --hl1: #fff27a;
+  --ui: "Pretendard Variable", Pretendard, "맑은 고딕", "Malgun Gothic", system-ui, sans-serif;
+  --doc: "Noto Serif KR", "바탕", Batang, serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--desk); color: var(--ink); font: 15px/1.6 var(--ui); }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 14px 24px 10px; border-bottom: 2px solid var(--form); background: var(--paper); }
+header h1 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; color: var(--form); }
+header p { margin: 0; color: var(--muted); font-size: 13px; }
+header .maker { margin-left: auto; color: var(--form); font-size: 12px; }
+main { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 24px; padding: 18px 24px 40px; max-width: 1560px; margin: 0 auto; align-items: start; }
+aside { position: sticky; top: 16px; }
+@media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); padding: 14px 16px 32px; } aside { position: static; } }
+aside h2 { font-size: 14px; margin: 0 0 6px; color: var(--form); }
+aside h3 { font-size: 13px; margin: 12px 0 4px; color: var(--muted); font-weight: 600; }
+aside details { margin-top: 14px; border-top: 1px solid var(--rule); padding-top: 10px; }
+aside summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); }
+label.chk { display: block; margin: 3px 0; cursor: pointer; font-size: 14px; }
+input[type=number], textarea, select { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--paper); color: var(--ink); }
+textarea { min-height: 60px; resize: vertical; font-size: 13px; }
+.hint { color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
+#drop { border: 1.5px dashed #9fb0c4; border-radius: 6px; padding: 32px; text-align: center; background: var(--paper); cursor: pointer; }
+#drop.compact { padding: 7px 12px; text-align: left; font-size: 13px; background: transparent; }
+#drop.compact .more { display: none; }
+.safe { margin: 14px auto 0; max-width: 34em; padding-top: 12px; border-top: 1px solid var(--rule); font-size: 13px; color: #2f5d3e; }
+#drop.compact .safe { margin: 4px 0 0; padding: 0; border: 0; max-width: none; font-size: 12px; }
+#drop.over { border-color: var(--form); background: #f1f5fa; }
+#drop strong { color: var(--form); }
+button { font: inherit; padding: 6px 12px; border-radius: 4px; border: 1px solid var(--form); background: var(--form); color: #fff; cursor: pointer; }
+button.ghost { background: var(--paper); color: var(--form); }
+button:disabled { opacity: .4; cursor: default; }
+:focus-visible { outline: 3px solid #8fb0dc; outline-offset: 2px; }
+.msg { padding: 6px 0; margin: 6px 0; font-size: 13px; color: var(--muted); }
+.msg.err { padding: 8px 12px; border-left: 3px solid var(--pen); background: #fbeceb; color: var(--ink); }
+.s3 { background: var(--hl3); } .s2 { background: var(--hl2); } .s1 { background: var(--hl1); }
+.badge { display: inline-block; padding: 0 7px; border-radius: 3px; font-size: 12px; white-space: nowrap; }
+/* 상단 띠: 단계 버튼이 곧 필터 */
+.summary { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--desk); padding: 10px 0; }
+.chip { color: var(--ink); padding: 4px 12px; border: 1px solid rgba(30,39,51,.18); border-radius: 4px; font-size: 14px; }
+.chip b { margin-left: 6px; font-variant-numeric: tabular-nums; }
+.chip.off { background: transparent; color: var(--muted); border-style: dashed; }
+.progress { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 4px; }
+.spacer { flex: 1; }
+.tabs { display: inline-flex; border: 1px solid var(--form); border-radius: 4px; overflow: hidden; }
+.tabs button { border: 0; border-radius: 0; background: var(--paper); color: var(--form); }
+.tabs button.on { background: var(--form); color: #fff; }
+/* 학생별 보기: 출석부 같은 명단 + 학생부 한 장 */
+.split { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 18px; align-items: start; }
+#studentList { background: var(--paper); border: 1px solid var(--rule); position: sticky; top: 60px; max-height: calc(100vh - 80px); overflow: auto; }
+@media (max-width: 1000px) { .split { grid-template-columns: minmax(0, 1fr); } #studentList { max-height: 220px; position: static; } }
+#studentList .opt { padding: 7px 10px; border-bottom: 2px solid var(--form); font-size: 13px; color: var(--muted); }
+.stu { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 10px; border: 0; border-bottom: 1px solid #edf0f3; border-radius: 0; background: none; color: var(--ink); text-align: left; font-size: 14px; }
+.stu:hover { background: #f3f6f9; }
+.stu.on { background: #e6edf5; box-shadow: inset 3px 0 0 var(--form); font-weight: 600; }
+.stu.clear { color: var(--muted); }
+.stu.clear .dots { color: #3d7a4f; }
+.stu .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dots { display: inline-flex; gap: 3px; }
+.dot { min-width: 20px; text-align: center; border-radius: 3px; font-size: 11px; padding: 0 4px; font-variant-numeric: tabular-nums; }
+#detail { background: var(--paper); border: 1px solid var(--rule); box-shadow: 0 1px 0 #d5dbe2, 0 8px 24px -16px rgba(30,39,51,.35); padding: 22px 26px 26px; }
+.detail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.detail-head h2 { margin: 0; font-size: 20px; flex: 1; letter-spacing: -0.01em; }
+.att { margin: 6px 0 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.att b { color: var(--ink); font-weight: 600; margin-right: 10px; }
+/* 학생부 서식처럼: 왼쪽 머리칸, 오른쪽 내용칸 */
+.sheet { border-top: 2px solid var(--form); border-bottom: 2px solid var(--form); }
+.field { display: grid; grid-template-columns: 148px minmax(0, 1fr); border-top: 1px solid var(--rule); }
+.field:first-child { border-top: 0; }
+.field .lab { padding: 12px 12px 12px 0; border-right: 1px solid var(--rule); font-size: 13px; font-weight: 600; color: var(--form); }
+.field .cell { padding: 12px 0 12px 16px; min-width: 0; }
+@media (max-width: 640px) { .field { grid-template-columns: minmax(0, 1fr); } .field .lab { border-right: 0; padding-bottom: 0; } .field .cell { padding-left: 0; } #detail { padding: 16px; } }
+.meter { display: block; margin-top: 6px; font-weight: 400; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.meter i { display: block; width: 100%; max-width: 110px; height: 3px; margin-top: 4px; background: #e3e8ee; }
+.meter i span { display: block; height: 100%; background: var(--form); }
+.meter.over { color: var(--pen); font-weight: 600; } .meter.over i span { background: var(--pen); }
+.txt { font-family: var(--doc); font-size: 15.5px; line-height: 2; white-space: pre-wrap; max-width: 46em; word-break: keep-all; overflow-wrap: anywhere; }
+.hope { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+/* 빨간 펜 메모 */
+.issues { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; color: var(--pen); }
+.issues li { display: flex; gap: 8px; align-items: flex-start; padding: 2px 0; }
+.issues li .lv { flex: none; width: 9px; height: 9px; margin-top: 6px; border-radius: 2px; }
+.issues li.done { color: var(--muted); text-decoration: line-through; }
+.issues li.done .lv { opacity: .35; }
+.issues input { margin: 3px 0 0; accent-color: var(--form); }
+.sheet + .issues, .general { margin: 0 0 12px; }
+/* 형광펜: 글줄 가운데만 칠해 손으로 그은 느낌을 낸다 */
+mark { color: inherit; background: transparent; padding: 0 1px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+mark.m3 { background: linear-gradient(transparent 18%, var(--hl3) 18%, var(--hl3) 92%, transparent 92%); }
+mark.m2 { background: linear-gradient(transparent 18%, var(--hl2) 18%, var(--hl2) 92%, transparent 92%); }
+mark.m1 { background: linear-gradient(transparent 18%, var(--hl1) 18%, var(--hl1) 92%, transparent 92%); }
+mark.done { background: linear-gradient(transparent 86%, #c7ced6 86%); }
+mark.focus { outline: 2px solid var(--pen); outline-offset: 1px; border-radius: 2px; }
+.empty { color: #9aa5b1; font-family: var(--ui); font-size: 13px; }
+/* 전체 목록 */
+table { width: 100%; min-width: 820px; border-collapse: collapse; font-size: 13px; }
+th, td { border-bottom: 1px solid #e6eaef; padding: 6px 8px; text-align: left; vertical-align: top; }
+td:nth-child(-n+5), th { white-space: nowrap; }
+td:nth-child(6) { min-width: 280px; }
+th { background: var(--paper); color: var(--form); border-bottom: 2px solid var(--form); position: sticky; top: 0; }
+tr.row { cursor: pointer; } tr.row:hover { background: #f3f6f9; } tr.done { color: var(--muted); }
+.tablewrap { max-height: calc(100vh - 140px); overflow: auto; border: 1px solid var(--rule); background: var(--paper); }
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+.hidden { display: none !important; }
+/* 시상계획 붙여넣기 창 */
+#planOpen { width: 100%; }
+dialog { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--rule); border-top: 3px solid var(--form); border-radius: 6px; padding: 18px 22px 20px; color: var(--ink); background: var(--paper); }
+dialog::backdrop { background: rgba(30,39,51,.4); }
+dialog h2 { margin: 0 0 4px; font-size: 17px; color: var(--form); }
+#planText { min-height: 150px; white-space: pre; overflow-x: auto; }
+#planPreview { margin: 10px 0 14px; max-height: 240px; overflow: auto; border: 1px solid var(--rule); }
+#planPreview table { min-width: 0; }
+#planPreview td:nth-child(n) { min-width: 0; white-space: normal; }
+#planPreview p { margin: 10px 12px; font-size: 13px; color: var(--muted); }
+.dlg-foot { display: flex; gap: 8px; }
+@media print { aside, .summary, #drop, #studentList, .detail-head button { display: none !important; } main, .split { display: block; } body { background: #fff; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>중학교 생기부 점검기</h1>
+  <p>2026 중학교 기재요령 기준으로 고칠 곳과 이유를 표시합니다. 최종 판단은 선생님 몫이고, 파일은 이 컴퓨터 밖으로 나가지 않습니다.</p>
+  <p class="maker">만든 사람 Kang SeongHo</p>
+</header>
+<main>
+<aside>
+  <h2>점검 설정</h2>
+  <h3>점검 시기</h3>
+  <select id="mode">
+    <option value="first">1학기 점검</option>
+    <option value="year_end">학년말 점검</option>
+  </select>
+  <h3>기준 수업일수</h3>
+  <input type="number" id="days" min="0" max="366" value="0">
+  <p class="hint">0이면 학급 다수와 다른 학생만 표시합니다.</p>
+  <h3>우리 학교 시상계획</h3>
+  <button class="ghost" id="planOpen">시상계획 넣기</button>
+  <p class="hint" id="planInfo">넣으면 수상경력의 수상명이 계획과 같은지 봅니다.</p>
+
+  <details>
+  <summary>점검 항목 고르기</summary>
+  <label class="chk"><input type="checkbox" data-opt="bytes" checked> 나이스 Byte 한도</label>
+  <label class="chk"><input type="checkbox" data-opt="banned" checked> 기재 금지 후보</label>
+  <label class="chk"><input type="checkbox" data-opt="blank" checked> 공란</label>
+  <label class="chk"><input type="checkbox" data-opt="attendance" checked> 출결 숫자</label>
+  <label class="chk"><input type="checkbox" data-opt="awards" checked> 수상경력·시상계획</label>
+  <label class="chk"><input type="checkbox" data-opt="ending" checked> 명사형 종결·마침표</label>
+  <label class="chk"><input type="checkbox" data-opt="spelling" checked> 맞춤법</label>
+  <label class="chk"><input type="checkbox" data-opt="spacing" checked> 띄어쓰기·문장부호</label>
+  <label class="chk"><input type="checkbox" data-opt="symbols" checked> 기호(★ → □ 등)</label>
+  <label class="chk"><input type="checkbox" data-opt="english" checked> 영문 입력</label>
+  <label class="chk"><input type="checkbox" data-opt="officer" checked> 임원 재임기간 병기</label>
+  <label class="chk"><input type="checkbox" data-opt="passive" checked> 피동·추측 표현</label>
+  <label class="chk"><input type="checkbox" data-opt="caution" checked> 주의 표현</label>
+  <label class="chk"><input type="checkbox" data-opt="similar" checked> 행특 학생 간 유사도</label>
+  <label class="chk"><input type="checkbox" data-opt="middot"> 가운데점(·) 사용</label>
+  </details>
+
+  <details>
+  <summary>허용 영문·주의 표현</summary>
+  <h3>허용할 영문</h3>
+  <textarea id="englishOk">AI, SNS, PPT, UCC, IT, TV, PAPS, CEO, PD, POP, CF, PC</textarea>
+  <p class="hint">기재요령이 허용한 일반화된 명사입니다. 도서명·저자명 등 학교에서 확인한 표현을 쉼표로 더하세요.</p>
+  <h3>주의 표현</h3>
+  <textarea id="cautionWords">산만, 부족함, 떨어짐, 못함, 느림, 불성실, 나쁨, 무관심, 거짓말, ㅋㅋ, ㅎㅎ, 기타등등</textarea>
+  <p class="hint">부정적이거나 근거가 필요한 표현입니다. 학교에 맞게 고치세요.</p>
+  </details>
+</aside>
+
+<div>
+  <div id="drop">
+    <strong>학생부 PDF</strong>나 <strong>종합일람표 엑셀</strong>을 <span class="more">여기에 </span>끌어다 놓거나 클릭해서 고르세요.<span class="more"><br>
+    <span class="hint">나이스 학생부 개인별 출력 PDF, xlsx, xls 지원</span></span>
+    <p class="safe">학생 이름이나 주민등록번호를 지우지 않고 그대로 넣어도 됩니다. 파일은 이 컴퓨터의 브라우저 안에서만 읽고, 인터넷으로 보내거나 저장하지 않습니다. 창을 닫으면 읽은 내용도 사라집니다.</p>
+    <input type="file" id="file" accept=".pdf,.xlsx,.xls,.xlsm" class="hidden">
+  </div>
+  <div id="status"></div>
+  <div id="sheetPick" class="toolbar hidden">
+    <label>시트 <select id="sheet"></select></label>
+  </div>
+  <div id="result" class="hidden">
+    <div class="summary">
+      <button class="chip s3" data-sev="3" title="눌러서 이 단계 보기·숨기기">필수 점검<b id="c3">0</b></button>
+      <button class="chip s2" data-sev="2" title="눌러서 이 단계 보기·숨기기">확인 필요<b id="c2">0</b></button>
+      <button class="chip s1" data-sev="1" title="눌러서 이 단계 보기·숨기기">개선 권장<b id="c1">0</b></button>
+      <span class="progress" id="progress"></span>
+      <label class="progress hidden" id="showDoneWrap" title="괜찮다고 체크한 항목은 목록에서 숨겨집니다"><input type="checkbox" id="showDone"> 확인한 것도 보기</label>
+      <span class="spacer"></span>
+      <span class="tabs"><button data-view="student" class="on">학생별</button><button data-view="table">전체 목록</button></span>
+      <button id="download" class="ghost">엑셀로 저장</button>
+    </div>
+    <div id="studentView" class="split">
+      <nav id="studentList" aria-label="학생 명단"></nav>
+      <section id="detail" class="card"></section>
+    </div>
+    <div id="tableView" class="hidden">
+      <div class="toolbar"><label>학생 <select id="tableStudent" style="width:auto"></select></label>
+        <span class="hint" style="margin:0">줄을 누르면 그 학생 화면으로 갑니다. 괜찮은 항목은 왼쪽 칸에 체크하면 목록에서 사라집니다.</span></div>
+      <div class="tablewrap"><table id="issueTable"></table></div>
+    </div>
+  </div>
+</div>
+</main>
+
+<dialog id="planDlg" aria-labelledby="planTitle">
+  <h2 id="planTitle">우리 학교 시상계획</h2>
+  <p class="hint">2026학년도 교내상 운영 계획이 기본으로 들어 있습니다. 2학기 초에 계획이 바뀌었으면 여기서 고치세요. 고친 내용은 이 컴퓨터에만 남고, '기본 계획으로 되돌리기'로 언제든 처음 계획으로 돌아갑니다.<br>다른 학교 계획을 넣으려면 '파일에서 불러오기'로 계획 파일을 고르거나, 표를 한글·엑셀에서 통째로 복사해 붙여 넣으세요. 머리줄(연번, 수상명, 시행 학기…)이 같이 들어가도 됩니다. 표가 없으면 한 줄에 수상명 하나씩 써도 됩니다.</p>
+  <textarea id="planText" spellcheck="false" placeholder="연번	수상명	시행(학기)	참가대상	수상비율
+1	독후감쓰기대회	1학기	전교생 중 참가자	20%
+2	표창장(선행부문)	2학기	전교생	10%"></textarea>
+  <div class="toolbar">
+    <button class="ghost" id="planFileBtn">파일에서 불러오기</button>
+    <span class="hint" id="planMsg" style="margin:0">PDF, 엑셀, 한글(hwpx) 파일의 시상계획 표를 읽어 위 칸에 넣습니다.</span>
+    <input type="file" id="planFile" accept=".pdf,.xlsx,.xls,.xlsm,.hwpx,.hwp" class="hidden">
+  </div>
+  <div id="planPreview"></div>
+  <div class="dlg-foot">
+    <button class="ghost" id="planReset">기본 계획으로 되돌리기</button>
+    <button class="ghost" id="planClear">모두 지우기</button>
+    <span class="spacer"></span>
+    <button id="planDone">적용하고 닫기</button>
+  </div>
+</dialog>
+
+<script>
+'use strict';
+// ── 규칙 ─────────────────────────────────────────────────────────────
+const SEV = { 3: '필수 점검', 2: '확인 필요', 1: '개선 권장' };
+const FIELD_LABEL = { 교과: '교과 세특', 자율: '자율·자치활동', 동아리: '동아리활동', 진로: '진로활동', 봉사: '봉사활동',
+  창체: '창의적 체험활동', 자유학기: '자유학기활동', 행동: '행동특성 및 종합의견', 출결특기: '출결 특기사항', 수상: '수상경력',
+  수업일수: '수업일수', 결석: '결석', 지각: '지각', 조퇴: '조퇴', 결과: '결과' };
+const TEXT_FIELDS = ['교과', '자유학기', '자율', '동아리', '진로', '창체', '봉사', '행동', '출결특기'];
+const NUM_FIELDS = ['수업일수', '결석', '지각', '조퇴', '결과'];
+// 2026 중학교 기재요령 입력 가능 최대 글자수(162쪽)를 Byte로 바꾼 값. 교과·자유학기·봉사는 과목·영역·실적별로 적용한다.
+const BYTE_LIMIT = { 자율: 1500, 동아리: 1500, 진로: 1500, 행동: 900, 교과: 1500, 자유학기: 3000, 출결특기: 1500, 봉사: 150 };
+// 문장 종결을 보지 않는 칸: 출결 사유와 봉사 활동내용은 '편도선수술(5일)'처럼 짧게 쓴다.
+const NO_ENDING = new Set(['봉사', '출결특기']);
+
+// 헤더 글자 → 항목. 공백과 가운데점 종류를 지운 뒤 비교한다.
+const ALIASES = {
+  '번호': '번호', '성명': '이름', '이름': '이름',
+  '수업일수': '수업일수', '결석': '결석', '결석일수': '결석', '지각': '지각', '조퇴': '조퇴', '결과': '결과',
+  '특기사항': '출결특기', '출결특기사항': '출결특기',
+  '자율활동': '자율', '자율자치활동': '자율', '동아리활동': '동아리', '진로활동': '진로', '봉사활동': '봉사', '봉사활동실적': '봉사',
+  '창의적체험활동': '창체', '창의적체험활동상황': '창체',
+  '교과학습발달상황': '교과', '세부능력및특기사항': '교과', '교과세부능력및특기사항': '교과',
+  '자유학기활동상황': '자유학기', '자유학기활동': '자유학기',
+  '행동특성및종합의견': '행동',
+};
+const norm = s => String(s ?? '').replace(/[\s·・ㆍ‧∙]/g, '');
+
+const ALL = new Set(TEXT_FIELDS);
+const SUBJ = new Set(['교과']), BEH = new Set(['행동']), CREATIVE = new Set(['자율', '동아리', '진로', '창체']);
+// [구분, 정규식, 안내, 적용 칸]
+const BANNED = [
+  ['공인어학·인증시험', /토익|토플|텝스|오픽|TOEIC|TOEFL|TEPS|OPIc|HSK|JLPT|JPT|DELF|DALF|TESTDAF|DSH|DSD|TORFL|DELE|한자능력검정|한자급수|한자자격|실용한자|상무한검|상공회의소\s*한자|인증\s*시험|급수\s*시험|컴활/gi, '공인어학시험·인증시험은 어떤 항목에도 기재 불가', ALL],
+  ['대회', /대회|경시|올림피아드|경연|입상|(?:대|금|은|동|최우수|우수|장려|특)상(?:을)?\s*(?:수상|받)/g, '교내외 대회 참여·수상은 기재 불가(교내대회는 수상경력에만). 체육대회 같은 학교 행사인지 확인', ALL],
+  ['교외상', /표창장|감사장|공로상/g, '교외 기관·단체의 상은 기재 불가', ALL],
+  ['논문', /소?논문|학회지|학술지|학회(?:에서)?\s*발표/g, '논문 투고·학회 발표는 기재 불가', ALL],
+  ['도서출간', /출간|저서/g, '도서출간 사실은 기재 불가', ALL],
+  ['지식재산권', /특허|실용신안|상표\s*(?:출원|등록)/g, '지식재산권 출원·등록은 기재 불가', ALL],
+  ['해외활동', /해외\s*(?:연수|봉사|캠프|활동)|어학\s*연수|교환\s*학생/g, '해외 활동실적은 기재 불가', ALL],
+  ['부모 배경', /(?:아버지|어머니|부모님?|아빠|엄마|삼촌|이모|고모|친척)(?:의|가|께서|는|이)?\s*(?:직업|직장|회사|병원|의사|변호사|교수|대표|사장|약사|판사|검사|공무원|운영하)/g, '부모·친인척의 사회·경제적 지위 암시는 기재 불가', ALL],
+  ['장학', /장학생|장학금/g, '장학 관련 내용은 기재 불가', ALL],
+  ['사교육·상호명', /(?<!대)학원|과외|인강|유튜브|메가스터디|이투스/g, '사교육·상호명은 기재 불가', ALL],
+  ['특정 대학명', /[가-힣]{1,10}대학교/g, '특정 대학명은 기재 불가(문맥 확인)', ALL],
+  ['자격증', /자격증|자격\s*(?:취득|획득)/g, '자격증 명칭·취득 사실은 기재 불가', ALL],
+  ['온라인 강좌', /K-?MOOC|MOOC|KOCW|무크/gi, 'MOOC·KOCW 관련 사항은 교과 세특에 기재 불가', SUBJ],
+  ['방과후학교', /방과\s*후/g, '방과후학교 활동은 기재 불가(동아리의 방과후학교스포츠클럽 클럽명만 예외)', new Set(['교과', '행동', '자율', '진로', '자유학기'])],
+  ['연구보고서', /연구\s*보고서/g, '연구보고서(소논문) 관련은 세특 기재 불가, 창체에서도 제목·주제 등 불가', new Set(['교과', '자율', '동아리', '진로', '창체'])],
+];
+// 금지로 단정하기 어려워 '확인 필요'로만 표시하는 후보
+const CAUTION_RULES = [
+  ['상호명·기관명 후보', /네이버|구글|카카오|패들렛|캔바|미리캔버스|띵커벨|클래스카드|노션|챗\s*GPT|ChatGPT|뤼튼|(?<![가-힣])줌(?=을|를|으로|에서|\s*(?:화상|회의|수업))|Zoom|커리어넷|엔트리|스크래치|롯데월드|에버랜드/gi, '구체적인 기관명·상호명은 입력 불가. 교육관련기관이거나 일반 명사로 바꿀 수 있는지 확인', ALL],
+  ['강사명 후보', /[가-힣]{2,4}\s*(?:강사|작가|교수|박사)(?:님)?(?=의|가|를|와|과|에게|를\s*초청|\s*초청)/g, '학생이 참여한 강의의 강사명은 입력 불가', ALL],
+  ['청소년단체', /청소년\s*단체|스카우트|아람단|누리단|한별단|RCY|우주소년단/g, '청소년단체는 동아리에 단체명만 입력하고 특기사항은 입력하지 않음', ALL],
+];
+const SPELLING = [
+  [/되요/g, "'되요' → '돼요'"], [/몇일/g, "'몇일' → '며칠'"], [/역활/g, "'역활' → '역할'"],
+  [/오랜동안/g, "'오랜동안' → '오랫동안'"], [/오랫만/g, "'오랫만' → '오랜만'"], [/금새/g, "'금새' → '금세'"],
+  [/구지/g, "'구지' → '굳이'"], [/왠만/g, "'왠만' → '웬만'"], [/설겆이/g, "'설겆이' → '설거지'"],
+  [/있슴|없슴/g, "'-슴' → '-음'"], [/어떻해/g, "'어떻해' → '어떡해'"], [/희안/g, "'희안' → '희한'"],
+];
+const SPACING = [[/ {2,}(?=\S)/g, '연속 공백'], [/[ \t]+[.,]/g, '문장부호 앞 공백'], [/\.\.(?!\.)|\. \./g, '마침표 중복'], [/\t/g, '탭 문자']];
+const SYMBOLS = /[•‣⁃※〓←-⇿■-◿☀-⛿✀-➿⬀-⯿]/g;
+const PASSIVE = [
+  [/생각(?:됨|된다|되어|되며|되는)/g, '피동 표현: 관찰한 사실로'], [/보여(?:짐|진다|지는|지며)/g, '피동 표현: 관찰한 사실로'],
+  [/판단(?:됨|된다|되는)/g, '피동 표현: 관찰한 사실로'], [/것\s*같(?:음|다|아|은)/g, "추측 표현 '~것 같-': 관찰한 사실로"],
+  [/듯\s*(?:함|하다|보임)/g, "추측 표현 '~듯': 관찰한 사실로"],
+];
+const OFFICER = /(?:(?:1|2)\s*학기\s*)?(?:전교|학년|학급)?\s*(?:학생\s*자치회\s*)?(?:부회장|회장|부반장|반장)/g;
+const TERM = /^\s*\(\s*\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?\s*[-~∼～–]\s*\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?\s*\)/;
+
+// ── 엑셀 읽기 ──────────────────────────────────────────────────────
+let workbook = null, fileName = '', current = null;
+
+function sheetGrid(ws) {
+  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true, blankrows: true });
+  // 병합된 헤더는 왼쪽 위 값으로 채워야 '결석일수 > 질병·미인정·기타' 같은 묶음을 읽을 수 있다.
+  for (const m of ws['!merges'] || []) {
+    const v = (grid[m.s.r] || [])[m.s.c];
+    for (let r = m.s.r; r <= m.e.r; r++) for (let c = m.s.c; c <= m.e.c; c++) {
+      grid[r] = grid[r] || [];
+      if (grid[r][c] === '' || grid[r][c] === undefined) grid[r][c] = { merged: v };
+    }
+  }
+  return grid;
+}
+const cellText = v => v && typeof v === 'object' ? '' : String(v ?? '');
+const headText = v => v && typeof v === 'object' ? String(v.merged ?? '') : String(v ?? '');
+
+function findHeader(grid) {
+  for (let r = 0; r < grid.length; r++) {
+    const row = grid[r] || [];
+    const noCol = row.findIndex(v => norm(headText(v)) === '번호');
+    if (noCol < 0) continue;
+    if (!row.some(v => ['성명', '이름'].includes(norm(headText(v))))) continue;
+    let first = r + 1;
+    while (first < grid.length && !/^\d+$/.test(norm(cellText((grid[first] || [])[noCol])))) first++;
+    const cols = {};
+    const width = Math.max(...grid.slice(r, first).map(x => (x || []).length));
+    for (let c = 0; c < width; c++) {
+      for (let hr = r; hr < first; hr++) {
+        const key = ALIASES[norm(headText((grid[hr] || [])[c]))];
+        if (key) { (cols[key] = cols[key] || []).push(c); break; }
+      }
+    }
+    for (const k in cols) cols[k] = [...new Set(cols[k])];
+    return { row: r, first, noCol, cols };
+  }
+  return null;
+}
+
+function parseSheet(name) {
+  const grid = sheetGrid(workbook.Sheets[name]);
+  const head = findHeader(grid);
+  if (!head) throw new Error("'번호'와 '성명' 헤더를 찾지 못했습니다. 종합일람표 시트가 맞는지 확인해 주세요.");
+  const students = [];
+  let cur = null;
+  for (let r = head.first; r < grid.length; r++) {
+    const row = grid[r] || [];
+    const no = norm(cellText(row[head.noCol]));
+    if (/^\d+$/.test(no)) {
+      const nameCol = (head.cols['이름'] || [])[0];
+      cur = { 번호: +no, 이름: cellText(row[nameCol]).trim(), row: r + 1, present: new Set(Object.keys(head.cols)) };
+      for (const f of TEXT_FIELDS) cur[f] = '';
+      for (const f of NUM_FIELDS) cur[f] = null;
+      students.push(cur);
+    } else if (!cur || row.every(v => !norm(cellText(v)))) continue;
+    // 번호가 빈 다음 행은 같은 학생의 이어지는 내용으로 붙인다.
+    for (const [key, cols] of Object.entries(head.cols)) {
+      if (key === '번호' || key === '이름') continue;
+      if (NUM_FIELDS.includes(key)) {
+        const vals = cols.map(c => cellText(row[c]).trim()).filter(Boolean);
+        if (!vals.length) continue;
+        const nums = vals.map(v => /^-?\d+(\.0+)?$/.test(v) ? +v : NaN);
+        cur[key] = nums.some(isNaN) ? vals.join('/') : (cur[key] ?? 0) + nums.reduce((a, b) => a + b, 0);
+      } else {
+        const text = cols.map(c => cellText(row[c]).replace(/\r\n?/g, '\n').trimEnd()).filter(t => t.trim()).join('\n');
+        if (text) cur[key] = cur[key] ? cur[key] + '\n' + text : text;
+      }
+    }
+  }
+  if (!students.length) throw new Error('학생 행을 하나도 읽지 못했습니다. 번호 칸에 숫자가 있는지 확인해 주세요.');
+  const title = grid.slice(0, head.row).flat().map(cellText).find(t => /학년|반|일람/.test(t)) || '';
+  return { sheet: name, title, students, cols: head.cols };
+}
+
+// ── 학생부 PDF 읽기 ────────────────────────────────────────────────
+// PDF에는 표 정보가 없고 글자 위치와 선만 있다. 칸 선을 모아 글자가 어느 칸 안에 있는지 찾는다.
+const SECTION = /^\d+\.(인적학적사항|출결상황|수상경력|학교폭력조치상황|창의적체험활동상황|교과학습발달상황|자유학기활동상황|독서활동상황|행동특성및종합의견)$/;
+const PDF_AREAS = { 자율활동: '자율', 자율자치활동: '자율', 동아리활동: '동아리', 진로활동: '진로' };
+const FREE_AREAS = ['진로탐색활동', '주제선택활동', '예술체육활동', '동아리활동'];
+
+async function pageCells(page) {
+  const vp = page.getViewport({ scale: 1 });
+  const { OPS, Util } = pdfjsLib;
+  const ops = await page.getOperatorList();
+  const H = [], V = [];
+  let ctm = [1, 0, 0, 1, 0, 0]; const stack = [];
+  const pt = (x, y) => vp.convertToViewportPoint(...Util.applyTransform([x, y], ctm));
+  const seg = (a, b) => {
+    if (Math.abs(a[1] - b[1]) < 0.5) H.push({ y: a[1], x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]) });
+    else if (Math.abs(a[0] - b[0]) < 0.5) V.push({ x: a[0], y0: Math.min(a[1], b[1]), y1: Math.max(a[1], b[1]) });
+  };
+  for (let i = 0; i < ops.fnArray.length; i++) {
+    const fn = ops.fnArray[i], args = ops.argsArray[i];
+    if (fn === OPS.save) stack.push(ctm);
+    else if (fn === OPS.restore) ctm = stack.pop() || ctm;
+    else if (fn === OPS.transform) ctm = Util.transform(ctm, args);
+    else if (fn === OPS.constructPath) {
+      const [sub, coords] = args; let k = 0, cur = null, start = null;
+      for (const op of sub) {
+        if (op === OPS.rectangle) {
+          const [x, y, w, h] = coords.slice(k, k += 4);
+          const p = [pt(x, y), pt(x + w, y), pt(x + w, y + h), pt(x, y + h)];
+          for (let j = 0; j < 4; j++) seg(p[j], p[(j + 1) % 4]);
+        } else if (op === OPS.moveTo) { cur = start = pt(coords[k], coords[k + 1]); k += 2; }
+        else if (op === OPS.lineTo) { const p = pt(coords[k], coords[k + 1]); k += 2; if (cur) seg(cur, p); cur = p; }
+        else if (op === OPS.curveTo) { cur = pt(coords[k + 4], coords[k + 5]); k += 6; }
+        else if (op === OPS.curveTo2 || op === OPS.curveTo3) { cur = pt(coords[k + 2], coords[k + 3]); k += 4; }
+        else if (op === OPS.closePath) { if (cur && start) seg(cur, start); cur = start; }
+      }
+    }
+  }
+  const tc = await page.getTextContent();
+  const cells = new Map();
+  for (const it of tc.items) {
+    if (!it.str || !it.str.trim()) continue;
+    const t = Util.transform(vp.transform, it.transform);
+    const size = Math.hypot(t[2], t[3]), x0 = t[4], y1 = t[5], x1 = x0 + it.width * vp.scale, y0 = y1 - size;
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    let left = -Infinity, right = Infinity, top = -Infinity, bottom = Infinity;
+    for (const v of V) if (v.y0 - 0.5 <= cy && cy <= v.y1 + 0.5) { if (v.x <= cx) left = Math.max(left, v.x); else right = Math.min(right, v.x); }
+    for (const h of H) if (h.x0 - 0.5 <= cx && cx <= h.x1 + 0.5) { if (h.y <= cy) top = Math.max(top, h.y); else bottom = Math.min(bottom, h.y); }
+    const boxed = [left, right, top, bottom].every(Number.isFinite);
+    const key = boxed ? [left, right, top, bottom].map(n => n.toFixed(1)).join() : 'free' + y0.toFixed(0) + ',' + x0.toFixed(0);
+    if (!cells.has(key)) cells.set(key, boxed ? { x0: left, x1: right, y0: top, y1: bottom, items: [] } : { x0, x1, y0, y1, items: [] });
+    const c = cells.get(key);
+    c.items.push({ str: it.str, x0, x1, y0, y1, size });
+    if (!boxed) { c.x1 = Math.max(c.x1, x1); }
+  }
+  // 칸 안 글자를 줄 단위로 잇는다. 오른쪽 끝까지 찬 줄은 글자 단위 줄바꿈으로 보고 공백 없이 잇는다.
+  const out = [];
+  for (const [key, c] of cells) {
+    const items = c.items.sort((a, b) => a.y1 - b.y1 || a.x0 - b.x0);
+    const lines = [];
+    for (const it of items) {
+      const line = lines[lines.length - 1];
+      if (line && Math.abs(line.y1 - it.y1) < it.size * 0.5) line.items.push(it); else lines.push({ y1: it.y1, items: [it] });
+    }
+    let text = '', prevEnd = null, prevSize = 0;
+    for (const line of lines) {
+      line.items.sort((a, b) => a.x0 - b.x0);
+      let s = '', end = null;
+      for (const it of line.items) { s += (end !== null && it.x0 - end > it.size * 0.2 ? ' ' : '') + it.str; end = it.x1; }
+      // 세특처럼 한 칸에 여러 과목이 있으면 '국어:'로 시작하는 줄에서 줄을 바꾼다.
+      const newSubject = /^[가-힣·]{1,12}(\([^)]{1,8}\))?\s*[:：]/.test(s.trim());
+      if (text) text += newSubject ? '\n' : (prevEnd !== null && c.x1 - prevEnd < prevSize * 1.5 ? '' : ' ');
+      text += s.trim(); prevEnd = end; prevSize = line.items[0].size;
+    }
+    out.push({ x0: c.x0, x1: c.x1, y0: c.y0, y1: c.y1, boxed: !key.startsWith('free'), text: text.replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').trim() });
+  }
+  return out.sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
+}
+
+const mid = c => [(c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2];
+const inCol = (c, col) => { const x = mid(c)[0]; return col && col.x0 - 1 <= x && x <= col.x1 + 1; };
+const inRow = (c, row) => { const y = mid(c)[1]; return row && row.page === c.page && row.y0 - 1 <= y && y <= row.y1 + 1; };
+const rightOf = (cells, label) => cells.find(c => c.page === label.page && Math.abs(c.x0 - label.x1) < 2 && inRow(c, label));
+
+async function parsePdf(buffer) {
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const raws = [];
+  let cur = null, section = '', sub = '';
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const cells = (await pageCells(await pdf.getPage(p))).map(c => ({ ...c, page: p, n: norm(c.text) }));
+    if (cells.some(c => c.n.includes('인적학적사항'))) {
+      cur = { 반: null, 번호: null, 이름: '', 수업일수: null, 결석: null, 지각: null, 조퇴: null, 결과: null, 출결특기: '',
+        자율: '', 동아리: '', 진로: '', 희망분야: '', 봉사: [], 자유학기: [], 교과: [], 행동: '', 수상: [], cells: [] };
+      raws.push(cur); section = ''; sub = '';
+    }
+    if (!cur) continue;
+    // 쪽 아래 반·번호·성명 줄: 학생 확인에 쓰고 본문에서는 뺀다.
+    const nameLabel = cells.find(c => c.n === '성명' && rightOf(cells, c) && cells.some(d => d.n === '번호' && inRow(d, c)));
+    let footer = Infinity;
+    if (nameLabel) {
+      footer = nameLabel.y0 - 3;
+      for (const key of ['반', '번호']) { const l = cells.find(c => c.n === key && inRow(c, nameLabel)); const v = l && rightOf(cells, l); if (v && cur[key] === null) cur[key] = +v.n || null; }
+      if (!cur.이름) cur.이름 = rightOf(cells, nameLabel).text;
+    }
+    for (const c of cells) {
+      if (mid(c)[1] >= footer) continue;
+      const m = c.n.match(SECTION);
+      if (m) { section = m[1]; sub = ''; continue; }
+      if (c.n === '봉사활동실적') { sub = '봉사'; continue; }
+      c.section = section; c.sub = sub;
+      if (section) cur.cells.push(c);
+    }
+  }
+  for (const r of raws) {
+    const by = name => r.cells.filter(c => c.section === name);
+    // 출결: 학년 다음 숫자 13칸(수업일수, 결석·지각·조퇴·결과 × 질병·미인정·기타). '.'은 아직 집계 전이다.
+    const att = by('출결상황'), attNote = att.find(c => c.n === '특기사항');
+    const nums = att.filter(c => /^(\d+|\.)$/.test(c.n) && attNote && c.y0 > attNote.y0).sort((a, b) => a.page - b.page || a.y0 - b.y0 || a.x0 - b.x0);
+    if (nums.length >= 14) {
+      const v = nums.slice(1, 14).map(c => c.n === '.' ? null : +c.n);
+      r.수업일수 = v[0]; r.결석기타 = v[3];
+      ['결석', '지각', '조퇴', '결과'].forEach((k, i) => { const part = v.slice(1 + 3 * i, 4 + 3 * i); r[k] = part.includes(null) ? null : part.reduce((a, b) => a + b, 0); });
+    }
+    if (attNote) r.출결특기 = att.filter(c => c !== attNote && inCol(c, attNote) && c.y0 >= attNote.y1 - 1).map(c => c.text).join(' ');
+    // 수상경력: 수상연월일 칸 하나가 상 하나다. 같은 높이의 다른 열 칸을 모으고,
+    // 여러 줄에 걸쳐 합쳐진 학년·학기 칸은 그 높이를 덮는 칸에서 읽는다.
+    const aw = by('수상경력'), awHead = {};
+    for (const [k, label] of [['학년', '학년(학기)'], ['이름', '수상명'], ['등급', '등급(위)'], ['날짜', '수상연월일'], ['기관', '수여기관'], ['대상', '참가대상(참가인원)']])
+      awHead[k] = aw.find(c => c.n === label);
+    if (awHead.날짜) {
+      const heads = Object.values(awHead);
+      const body = aw.filter(c => !heads.includes(c) && (c.page !== awHead.날짜.page || c.y0 >= awHead.날짜.y1 - 1));
+      const covers = (c, d) => c.page === d.page && c.y0 - 1 <= mid(d)[1] && mid(d)[1] <= c.y1 + 1;
+      let 학년 = '', 학기 = '';
+      for (const d of body.filter(c => inCol(c, awHead.날짜) && /^\d{4}\./.test(c.n))) {
+        const at = k => awHead[k] && body.find(c => inCol(c, awHead[k]) && covers(c, d))?.text || '';
+        if (awHead.학년) {
+          const yr = body.filter(c => covers(c, d) && awHead.학년.x0 - 1 <= mid(c)[0] && mid(c)[0] <= awHead.학년.x1 + 1).sort((a, b) => a.x0 - b.x0);
+          if (yr.length >= 2) { 학년 = yr[0].n; 학기 = yr[1].n; } else if (yr.length === 1) 학기 = yr[0].n;
+        }
+        r.수상.push({ 학년, 학기, 이름: at('이름'), 등급: at('등급'), 날짜: d.text, 기관: at('기관'), 대상: at('대상') });
+      }
+    }
+    // 창체: 영역 이름 칸의 세로 범위 안에 있는 특기사항 칸 글을 모은다.
+    const cr = by('창의적체험활동상황'), head = cr.find(c => c.n === '특기사항' && !c.sub);
+    const labels = cr.filter(c => PDF_AREAS[c.n] && !c.sub);
+    const hope = cr.find(c => c.n === '희망분야' && !c.sub), hopeVal = hope && rightOf(cr, hope);
+    if (hopeVal) r.희망분야 = hopeVal.text;
+    let area = null;
+    for (const c of cr.filter(c => !c.sub)) {
+      if (PDF_AREAS[c.n]) { area = PDF_AREAS[c.n]; continue; }
+      // 쪽이 바뀌면 머리줄(학년, 창의적 체험활동상황, 영역, 특기사항)이 다시 찍힌다.
+      if (['학년', '창의적체험활동상황', '영역', '특기사항'].includes(c.n)) continue;
+      if (!head || c === head || c === hope || c === hopeVal || !inCol(c, head) || (c.page === head.page && c.y0 < head.y1 - 1)) continue;
+      const owner = labels.find(l => inRow(c, l));
+      const key = owner ? PDF_AREAS[owner.n] : area;
+      if (key && c.text) r[key] = (r[key] + ' ' + c.text).trim();
+    }
+    const vol = cr.filter(c => c.sub === '봉사'), volHead = vol.find(c => c.n === '활동내용');
+    if (volHead) r.봉사 = vol.filter(c => c !== volHead && inCol(c, volHead) && c.text).map(c => c.text);
+    // 자유학기: 영역 칸과 같은 줄의 특기사항 칸
+    // 쪽을 넘어가면 영역 칸 없이 특기사항만 이어지므로 바로 앞 영역에 붙인다.
+    const fr = by('자유학기활동상황'), frHead = fr.find(c => c.n === '특기사항');
+    const frLabels = fr.filter(c => FREE_AREAS.includes(c.n)), frText = new Map();
+    let last = null;
+    for (const c of fr) {
+      if (FREE_AREAS.includes(c.n)) { last = c; frText.set(c, []); continue; }
+      if (!frHead || c === frHead || !inCol(c, frHead) || (c.page === frHead.page && c.y0 < frHead.y1 - 1) || !c.text) continue;
+      const owner = frLabels.find(l => inRow(c, l)) || last;
+      if (owner) frText.get(owner).push(c.text);
+    }
+    for (const l of frLabels) r.자유학기.push(`${l.n}: ${frText.get(l).join(' ')}`.trim());
+    // 행동특성: 제목 아래 머리칸과 같은 열의 글
+    const bh = by('행동특성및종합의견'), bhHead = bh.find(c => c.n === '행동특성및종합의견');
+    if (bhHead) r.행동 = bh.filter(c => c !== bhHead && inCol(c, bhHead) && (c.page !== bhHead.page || c.y0 >= bhHead.y1 - 1)).map(c => c.text).join(' ').trim();
+    // 교과 세특: '세부능력 및 특기사항' 열의 글과 같은 줄 왼쪽의 과목명
+    // 나이스 출력은 성적표 아래에 1열짜리 '세부능력 및 특기사항' 표를 두고, 과목명은 글 안에 '국어:'로 넣는다.
+    // 머리칸과 좌우 테두리가 같은 칸만 세특으로 본다(성적표 칸은 더 좁다).
+    const sj = by('교과학습발달상황'), sjHeads = sj.filter(c => c.n.includes('세부능력및특기사항'));
+    const sameBox = c => sjHeads.some(h => Math.abs(c.x0 - h.x0) < 2 && Math.abs(c.x1 - h.x1) < 2);
+    if (sjHeads.length) for (const c of sj) {
+      // '< 체육·예술(음악/미술) >' 같은 성적표 제목줄도 폭이 같아서 뺀다.
+      if (sjHeads.includes(c) || !c.text || !sameBox(c) || /^<[^>]*>$/.test(c.text)) continue;
+      r.교과.push(c.text);
+    }
+  }
+  return raws;
+}
+
+// 세특 칸이 쪽을 넘어가면 다음 쪽에 새 칸으로 이어진다. '과목:'으로 시작하지 않는 칸은 앞 과목에 붙인다.
+function joinSubjects(chunks) {
+  return chunks.reduce((text, c) => !text ? c : text + (/^[가-힣·]{1,12}(\([^)]{1,8}\))?\s*[:：]/.test(c) ? '\n' : ' ') + c, '');
+}
+
+// 수상 하나를 한 줄로 보여 준다. 점검 표시를 칸별로 칠하려고 각 칸의 글자 위치를 기억한다.
+const AWARD_COLS = ['이름', '등급', '날짜', '기관', '대상'];
+function awardLines(list) {
+  let text = '';
+  for (const a of list) {
+    if (text) text += '\n';
+    if (a.학기) text += `${a.학년 ? a.학년 + '학년 ' : ''}${a.학기}학기 | `;
+    a.pos = {}; a.line = [text.length];
+    AWARD_COLS.filter(k => a[k]).forEach((k, n) => { if (n) text += ' | '; a.pos[k] = [text.length, text.length + a[k].length]; text += a[k]; });
+    a.line.push(text.length);
+  }
+  return text;
+}
+
+function pdfStudents(raws) {
+  return raws.map((r, i) => {
+    const s = { 번호: r.번호 ?? i + 1, 이름: r.이름, row: i + 1, 결석기타: r.결석기타, 희망분야: r.희망분야, awards: r.수상, 수상: awardLines(r.수상),
+      present: new Set(['수업일수', '결석', '지각', '조퇴', '결과', '출결특기', '수상', '자율', '동아리', '진로', '희망분야', '봉사', '자유학기', '교과', '행동']) };
+    for (const f of NUM_FIELDS) s[f] = r[f];
+    Object.assign(s, { 출결특기: r.출결특기, 자율: r.자율, 동아리: r.동아리, 진로: r.진로, 행동: r.행동, 창체: '',
+      봉사: r.봉사.join('\n'), 자유학기: r.자유학기.join('\n'), 교과: joinSubjects(r.교과.filter(c => !/^(해당\s*사항\s*없음\.?\s*)+$/.test(c))) });
+    return s;
+  });
+}
+
+// ── 점검 ───────────────────────────────────────────────────────────
+const neisBytes = s => [...s].reduce((n, ch) => n + (ch.charCodeAt(0) < 128 ? 1 : 3), 0);
+
+function sentenceRanges(text) {
+  const out = []; let start = 0, depth = 0;
+  const push = (a, b) => { while (a < b && /\s/.test(text[a])) a++; while (b > a && /\s/.test(text[b - 1])) b--; if (a < b) out.push([a, b]); };
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if ('([{'.includes(ch)) depth++;
+    else if (')]}'.includes(ch)) depth = Math.max(0, depth - 1);
+    let boundary = ('.!?'.includes(ch) && depth === 0 && !(ch === '.' && /\d/.test(text[i - 1] || ''))) || ch === '\n';
+    if (boundary) { push(start, ch === '\n' ? i : i + 1); start = i + 1; depth = ch === '\n' ? 0 : depth; }
+  }
+  push(start, text.length);
+  return out;
+}
+function endsProperly(sent) {
+  let core = sent.replace(/[”’"'」』)\s]+$/, '');
+  if (!core.endsWith('.')) return false;
+  core = core.slice(0, -1).replace(/[”’"'」』)\s]+$/, '');
+  const code = core.charCodeAt(core.length - 1);
+  return code >= 0xAC00 && code <= 0xD7A3 && [10, 16].includes((code - 0xAC00) % 28);
+}
+// '해당 사항 없음'은 나이스가 빈 칸에 자동으로 찍는 문구라 문장 점검에서 뺀다.
+const isExempt = s => /^(해당\s*사항\s*없음\.?\s*)+$/.test(s) || /^\(.*\)$/.test(s) || /^[^\n]{1,20}[:：]$/.test(s) || /\d+\s*시간\s*\)?\.?$/.test(s) || s.replace(/[.\s]/g, '').length < 2;
+
+// 교과·자유학기는 '과목명:'으로 시작하는 줄마다 구간을 나눈다.
+function segments(text) {
+  const heads = [...text.matchAll(/^[ \t]*([가-힣A-Za-z0-9()·ㆍ ]{1,20}?)\s*[:：]/gm)];
+  if (!heads.length) return [{ name: '', a: 0, b: text.length }];
+  return heads.map((m, i) => ({ name: m[1].trim(), a: m.index, b: i + 1 < heads.length ? heads[i + 1].index : text.length }));
+}
+// 봉사활동 실적은 한 줄이 실적 하나다.
+function lineSegments(text) {
+  const out = []; let a = 0;
+  for (const line of text.split('\n')) { out.push({ name: '', a, b: a + line.length }); a += line.length + 1; }
+  return out;
+}
+
+// ── 수상경력과 시상계획 (기재요령 62~66쪽) ─────────────────────────
+// 수상명 비교용: 공백·가운데점·전각 괄호 차이는 같은 것으로 본다.
+const anorm = s => norm(s).replace(/[･]/g, '').replace(/（/g, '(').replace(/）/g, ')');
+const awardBase = s => anorm(s).replace(/\(.*$/, '');
+// 괄호 안 부문·과목. '공동수상', '3인'은 수상할 때 붙이는 말이라 계획과 비교하지 않는다.
+// '선행부문'과 '선행'처럼 '부문'을 붙였는지는 같은 것으로 본다.
+const awardParts = s => { const m = anorm(s).match(/\((.*)\)/); return m ? m[1].split(/[,，]/).filter(t => t && !/^공동수상$|^\d+[인명]$/.test(t)).map(t => t.replace(/부문$/, '')) : []; };
+
+// 한글·엑셀에서 복사한 표는 칸이 탭으로 나뉜다. 머리줄이 있으면 그 칸 위치를 쓰고, 없으면 글자 모양으로 수상명을 고른다.
+function parsePlan(text) {
+  const out = [], seen = new Set();
+  const isTerm = c => /^(?:\d\s*[,·~-]?\s*)*\d?\s*학기$|^연중$|^학년말$/.test(c.replace(/\s/g, ''));
+  let col = null, lastName = '';
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const cells = (line.includes('\t') ? line.split('\t') : line.split(/\s{2,}|\|/)).map(c => c.trim());
+    if (!cells.some(Boolean)) continue;
+    const h = cells.map(norm);
+    const nameAt = h.findIndex(c => ['수상명', '대회명', '상명', '시상명'].includes(c));
+    if (nameAt >= 0) {
+      col = { name: nameAt, term: h.findIndex(c => /시행|학기|시기/.test(c)), who: h.findIndex(c => c.startsWith('참가대상')), part: h.findIndex(c => c === '부문' || c === '참가부문') };
+      continue;
+    }
+    let name = col ? cells[col.name] || '' : cells.find(c => /[가-힣]/.test(c) && !isTerm(c) && !/^\d+(\.\d+)?%$/.test(c)) || '';
+    const part = col && col.part >= 0 ? cells[col.part] : '';
+    if (!name && part) name = lastName;  // 엑셀에서 합친 수상명 칸은 아랫줄이 비어 있다.
+    if (!name || /운영\s*계획|시상\s*계획|학년도/.test(name)) continue;  // 표 제목 줄
+    lastName = name;
+    if (part && !/\(/.test(name)) name = `${name}(${part})`;
+    const termCell = col && col.term >= 0 ? cells[col.term] || '' : cells.find(isTerm) || '';
+    const terms = new Set(/연중/.test(termCell) ? [1, 2] : [...termCell.matchAll(/\d/g)].map(m => +m[0]).filter(n => n === 1 || n === 2));
+    const who = col && col.who >= 0 ? cells[col.who] || '' : '';
+    if (seen.has(anorm(name))) continue;
+    seen.add(anorm(name));
+    out.push({ name, terms, termText: termCell, who });
+  }
+  return out;
+}
+
+// 계획과 글자는 같은데 띄어쓰기·가운데점만 다른 곳. 63쪽 '계획의 수상명과 일치하게'에 맞춰 글자 그대로 비교한다.
+const tidy = s => s.replace(/（/g, '(').replace(/）/g, ')').replace(/\s+/g, ' ').replace(/\s*([(),，])\s*/g, '$1').trim();
+const pieces = s => { const t = tidy(s), i = t.indexOf('('); return { base: i < 0 ? t : t.slice(0, i), parts: i < 0 ? [] : t.slice(i + 1).replace(/\)$/, '').split(/[,，]/).filter(Boolean) }; };
+function spacingDiff(name, hits) {
+  const r = pieces(name), out = [];
+  const base = pieces(hits[0].name).base;
+  if (r.base !== base) out.push([r.base, base]);
+  const planParts = hits.flatMap(h => pieces(h.name).parts);
+  for (const t of r.parts) {
+    const q = planParts.find(x => anorm(x).replace(/부문$/, '') === anorm(t).replace(/부문$/, ''));
+    if (!q) continue;
+    // 계획 부문 칸에 '부문'이 없으면 '부문' 앞 띄어쓰기는 비교하지 않는다.
+    const cut = /부문$/.test(t) && /부문$/.test(q) ? x => x : x => x.replace(/\s*부문$/, '');
+    if (cut(t) !== cut(q)) out.push([t, q]);
+  }
+  return out;
+}
+
+function planMatch(name, plan) {
+  const base = awardBase(name), parts = awardParts(name);
+  const same = plan.filter(p => awardBase(p.name) === base);
+  if (same.length) {
+    // 계획에 부문이 없거나, 수상명의 부문·과목이 모두 계획에 있으면 같은 상으로 본다.
+    const hits = same.filter(p => { const pp = awardParts(p.name); return !pp.length || parts.every(t => pp.includes(t)); });
+    // 계획에는 부문이 있는데 수상명에 부문을 쓰지 않은 경우
+    const noPart = !parts.length && !/^교과우수상/.test(base) && same.every(p => awardParts(p.name).length);
+    return hits.length ? { hits, noPart, same } : { partsDiffer: same };
+  }
+  const bigrams = t => { const m = []; for (let i = 0; i < t.length - 1; i++) m.push(t.slice(i, i + 2)); return m; };
+  const dice = (x, y) => { const a = bigrams(x), b = bigrams(y); if (!a.length || !b.length) return 0; let n = 0; const pool = [...b]; for (const g of a) { const k = pool.indexOf(g); if (k >= 0) { n++; pool.splice(k, 1); } } return 2 * n / (a.length + b.length); };
+  let near = null, best = 0;
+  for (const p of plan) {
+    const pb = awardBase(p.name);
+    const r = pb.includes(base) || base.includes(pb) ? 0.9 : dice(base, pb);
+    if (r > best) { best = r; near = p; }
+  }
+  return { near: best >= 0.5 ? near : null };
+}
+
+function checkAwards(s, plan, add) {
+  const seen = new Set();
+  for (const a of s.awards) {
+    const flag = (k, sev, msg) => { const [x, y] = a.pos[k] || a.pos.이름 || a.line; add(s, '수상', sev, msg, x, y); };
+    const nm = anorm(a.이름);
+    if (/운영위원장|이사장|동문회장|학부모회장/.test(norm(a.기관 + a.이름)) || /영재/.test(nm))
+      flag('기관', 3, '학교운영위원장상·재단이사장상·동문회장상·학부모회장상, 영재교육기관 관련 상은 입력 불가');
+    else if (a.기관 && !/장$/.test(norm(a.기관))) flag('기관', 3, '수여기관은 기관명이 아닌 기관장으로 입력(예: ○○중학교장)');
+    if (/응원상|환경미화|단체상|학급상|당선증|임명장|인증서/.test(nm)) flag('이름', 3, '학년·학급 단체수상, 당선증·임명장·인증서는 수상경력에 입력하지 않음');
+    if (/^표창장/.test(nm)) {
+      if (a.등급) flag('등급', 2, '표창장의 등급(위)은 공란으로 둠');
+      if (!awardParts(a.이름).length) flag('이름', 2, '표창장은 ( ) 안에 세부 표창 내용 입력(예: 표창장(선행부문))');
+    } else if (a.등급 && /상/.test(a.등급) && !/\(\d+위\)/.test(norm(a.등급))) flag('등급', 2, '상장에 적힌 대로 등급과 등위를 함께 입력(예: 금상(1위))');
+    if (/^교과우수상/.test(nm)) { if (norm(a.대상) !== '수강자') flag('대상', 2, "교과우수상의 참가대상은 '수강자'로 입력하고 참가인원은 넣지 않음"); }
+    else if (!/\(\d[\d,]*명\)$/.test(norm(a.대상))) flag('대상', 2, '참가대상(참가인원) 형식 확인(예: 1학년(200명), 전교생 중 참가자(185명))');
+    if (/공동수상/.test(nm) && !/공동수상,\d+인\)/.test(nm)) flag('이름', 2, "공동수상은 '수상명(공동수상, 3인)'처럼 수상인원을 함께 입력");
+    const key = a.학년 + '|' + awardBase(a.이름) + '|' + awardParts(a.이름).join();
+    if (seen.has(key)) flag('이름', 2, '같은 학년에 같은 상이 또 있음: 월별·분기별 수상이나 같은 교과성취도 기준 복수 수상은 하나만 입력');
+    seen.add(key);
+    if (!plan.length) continue;
+    const m = planMatch(a.이름, plan);
+    if (m.hits) {
+      if (m.noPart) flag('이름', 2, `계획에 부문이 있음: ( ) 안에 참가부문 입력(예: ${m.same[0].name})`);
+      const diff = spacingDiff(a.이름, m.hits);
+      if (diff.length) flag('이름', 2, `계획서와 띄어쓰기가 다름: ${diff.map(([x, y]) => `'${x}' → '${y}'`).join(', ')}`);
+      if (/^\d$/.test(a.학기) && m.hits.every(p => p.terms.size && !p.terms.has(+a.학기)))
+        flag('이름', 2, `계획의 시행 학기(${m.hits[0].termText})와 수상 학기(${a.학기}학기)가 다름: 2학기 초 시상계획 변경 여부 확인`);
+    } else if (m.partsDiffer) flag('이름', 2, `계획에는 ${m.partsDiffer.map(p => `'${p.name}'`).join(', ')}로 되어 있음: 괄호 안 부문 표기 확인`);
+    else if (m.near) flag('이름', 3, `시상계획에 없는 수상명. 계획의 '${m.near.name.replace(/\s*[（(].*$/, '')}'와 같은 상이면 계획의 수상명과 똑같이 입력`);
+    else flag('이름', 3, '시상계획에 없는 수상명: 학교교육계획(또는 2학기 초 변경 계획)에 있는 교내상만 입력 가능. 계획을 빠짐없이 넣었는지도 확인');
+  }
+}
+
+function check(data, opt) {
+  const issues = [];
+  const add = (s, field, sev, msg, start = -1, end = -1) => {
+    const text = s ? (s[field] ?? '') + '' : '';
+    let label = FIELD_LABEL[field] || field;
+    if (start >= 0 && (field === '교과' || field === '자유학기')) {
+      const seg = segments(text).find(g => g.a <= start && start < g.b);
+      if (seg && seg.name) label += ' - ' + seg.name;
+    }
+    if (start >= 0 && field === '수상') {
+      const a = s.awards.find(a => a.line[0] <= start && start <= a.line[1]);
+      if (a) label += ' - ' + a.이름;
+    }
+    const ctx = start >= 0 ? text.slice(Math.max(0, start - 15), Math.min(text.length, end + 15)) : '';
+    issues.push({ s, no: s ? s.번호 : '', name: s ? s.이름 : '', field, label, sev, msg, start, end, ctx: ctx.replace(/\n/g, ' ') });
+  };
+  const englishOk = new Set(opt.englishOk.map(w => w.toUpperCase()));
+  const daysList = data.students.map(s => s.수업일수).filter(v => typeof v === 'number');
+  const counts = {}; daysList.forEach(v => counts[v] = (counts[v] || 0) + 1);
+  const modeDays = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+  const seen = {};
+
+  for (const s of data.students) {
+    seen[s.번호] = (seen[s.번호] || 0) + 1;
+    if (seen[s.번호] === 2) add(s, '번호', 3, '학생 번호가 중복됨: 원본 명렬 확인');
+
+    // 출결
+    if (opt.attendance && s.present.has('수업일수')) {
+      for (const f of NUM_FIELDS) {
+        if (!s.present.has(f)) continue;
+        const v = s[f];
+        if (typeof v === 'string') add(s, f, 2, `${f} 값을 숫자로 읽지 못함: '${v}'`);
+        else if (v !== null && v < 0) add(s, f, 3, `${f} 값이 음수임`);
+      }
+      const su = s.수업일수, ab = s.결석;
+      if (typeof su === 'number' && typeof ab === 'number' && ab > su) add(s, '결석', 3, `결석 ${ab}일이 수업일수 ${su}일보다 큼`);
+      if (typeof su === 'number') {
+        if (opt.days && su !== opt.days) add(s, '수업일수', 2, `기준 ${opt.days}일과 다름: ${su}일. 전입·전출 이력 확인`);
+        else if (!opt.days && modeDays !== undefined && su !== +modeDays) add(s, '수업일수', 2, `학급 다수 ${modeDays}일과 다름: ${su}일. 전입·전출 이력 확인`);
+      }
+      const remarks = s.출결특기 || '';
+      for (const m of remarks.matchAll(/(결석|지각|조퇴|결과)[^\d\n]{0,12}(\d+)\s*(일|회)/g)) {
+        const total = s[m[1]];
+        if (typeof total === 'number' && +m[2] > total) add(s, '출결특기', 3, `특기사항의 ${m[1]} ${m[2]}${m[3]}가 집계 ${total}보다 큼`, m.index, m.index + m[0].length);
+      }
+      // 기재요령 59~60쪽: 기타결석은 1일이라도 사유 입력, 출석인정 결석은 사유 입력하지 않음, 개근은 학년 단위
+      if (s.결석기타 > 0 && !remarks.trim()) add(s, '출결특기', 3, `기타결석 ${s.결석기타}일: 1일이라도 사유를 특기사항에 입력해야 함`);
+      for (const m of remarks.matchAll(/출석\s*인정/g)) add(s, '출결특기', 2, '출석인정 결석은 사유를 입력하지 않음', m.index, m.index + m[0].length);
+      const perfect = remarks.match(/개근/);
+      if (perfect) {
+        const absent = ['결석', '지각', '조퇴', '결과'].map(k => s[k]).filter(v => typeof v === 'number');
+        if (absent.some(v => v > 0)) add(s, '출결특기', 3, "'개근'인데 결석·지각·조퇴·결과 기록이 있음", perfect.index, perfect.index + 2);
+        else if (opt.mode === 'first') add(s, '출결특기', 2, "'개근'은 학년 동안 기록이 없을 때 학년말 마감 시 입력됨. 1학기 자료인지 확인", perfect.index, perfect.index + 2);
+      }
+    }
+
+    if (opt.awards && s.awards) checkAwards(s, opt.plan, add);
+
+    // 공란
+    if (opt.blank) {
+      const need = ['자율', '동아리', '진로'].filter(f => s.present.has(f));
+      if (!need.length && s.present.has('창체')) need.push('창체');
+      if (opt.mode === 'year_end' && s.present.has('행동')) need.push('행동');
+      for (const f of need) if (!s[f].trim()) add(s, f, f === '행동' ? 3 : 2, f === '행동' ? '공란: 행특은 모든 학생에게 입력함' : "공란: 모든 학생에게 입력함. 참여하지 못했으면 사유 입력(예: '장기결석으로 활동 내용이 없음.')");
+      if (s.present.has('희망분야') && !String(s.희망분야 || '').trim())
+        add(s, '진로', 2, "진로 희망분야 공란: 정하지 못했어도 '진로탐색 중임.' 등으로 입력함");
+      // 자유학기 영역별 특기사항은 모든 학생에게 입력한다(108쪽).
+      for (const line of (s.자유학기 || '').split('\n')) {
+        const m = line.match(/^(.{2,12}?):\s*$/);
+        if (m) { const at = s.자유학기.indexOf(line); add(s, '자유학기', 2, `${m[1]} 특기사항 공란: 모든 학생에게 입력하고 0시간이면 사유 입력`, at, at + line.length); }
+      }
+    }
+
+    for (const f of TEXT_FIELDS) {
+      const text = s[f];
+      if (!text || !text.trim()) continue;
+      const each = (re, sev, msg) => { for (const m of text.matchAll(re)) add(s, f, sev, typeof msg === 'function' ? msg(m) : msg, m.index, m.index + m[0].length); };
+
+      if (opt.bytes && BYTE_LIMIT[f]) {
+        const segs = (f === '교과' || f === '자유학기') ? segments(text) : f === '봉사' ? lineSegments(text) : [{ name: '', a: 0, b: text.length }];
+        for (const g of segs) {
+          const n = neisBytes(text.slice(g.a, g.b).trim());
+          if (n > BYTE_LIMIT[f]) add(s, f, 3, `${g.name ? g.name + ' ' : ''}${n}Byte로 한도 ${BYTE_LIMIT[f]}Byte를 ${n - BYTE_LIMIT[f]}Byte 넘음`, g.a, g.b);
+        }
+      }
+      if (opt.banned) {
+        for (const [kind, re, msg, scope] of BANNED) if (scope.has(f)) each(re, 3, `[기재 금지 후보: ${kind}] ${msg}`);
+        for (const [kind, re, msg, scope] of CAUTION_RULES) if (scope.has(f)) each(re, 2, `[${kind}] ${msg}`);
+      }
+      if (opt.spelling) for (const [re, msg] of SPELLING) each(re, 2, '맞춤법: ' + msg);
+      if (opt.spacing) for (const [re, msg] of SPACING) each(re, 2, msg + ' 확인');
+      if (opt.symbols) {
+        each(SYMBOLS, 2, '특수문자 입력 지양(30쪽)');
+        each(/^[ \t]*(?:\d{1,2}[.)](?!\d)|[①-⑳]|[가-하][.)]|[-•▶▸○●■□※])\s*|[①-⑳]/gm, 2, '문단구분 기호(번호) 입력 지양(30쪽)');
+      }
+      if (opt.middot) each(/[·ㆍ‧∙•]/g, 1, "가운데점: 쉼표나 '와/과', '및'으로 바꿀 수 있는지 검토");
+      if (opt.english) for (const m of text.matchAll(/[A-Za-z]+/g)) {
+        // 한 글자(음이름 C·G, 변수 x 등)는 교과 내용에서 흔해 보지 않는다.
+        if (m[0].length === 1 || englishOk.has(m[0].toUpperCase())) continue;
+        if (/^(cm|mm|m|km|g|kg|mg|ml|mL|L)$/.test(m[0]) && /\d\s*$/.test(text.slice(0, m.index))) continue;
+        add(s, f, 2, `영문 '${m[0]}' 확인: 한글 표기나 허용 예외인지 검토`, m.index, m.index + m[0].length);
+      }
+      if (opt.passive && f !== '봉사') for (const [re, msg] of PASSIVE) each(re, 1, msg);
+      if (opt.caution) for (const w of opt.cautionWords) each(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), 2, `'${w}': 관찰 근거와 문맥 확인`);
+      if (opt.officer && (f === '자율' || f === '창체')) for (const m of text.matchAll(OFFICER)) {
+        if (!TERM.test(text.slice(m.index + m[0].length))) add(s, f, 2, "임원은 '전교·학년·학급'과 재임기간 (YYYY.MM.DD.-YYYY.MM.DD.) 병기 확인", m.index, m.index + m[0].length);
+        else if (!/전교|학년|학급/.test(m[0])) add(s, f, 2, "임원의 전교·학년·학급 범위 확인", m.index, m.index + m[0].length);
+      }
+      if (opt.ending && !NO_ENDING.has(f)) for (const [a, b] of sentenceRanges(text)) {
+        const sent = text.slice(a, b);
+        if (isExempt(sent) || endsProperly(sent)) continue;
+        const tail = Math.max(a, b - 6);
+        add(s, f, 2, '명사형 종결(~함, ~음, ~임)과 마침표 확인', tail, b);
+      }
+    }
+  }
+
+  // 행특 학생 간 유사도 (글자 2개씩 묶어 비교)
+  if (opt.similar) {
+    const bigrams = t => { const n = norm(t), m = new Map(); for (let i = 0; i < n.length - 1; i++) { const k = n.slice(i, i + 2); m.set(k, (m.get(k) || 0) + 1); } return m; };
+    const dice = (x, y) => { let inter = 0, tx = 0, ty = 0; x.forEach(v => tx += v); y.forEach(v => ty += v); x.forEach((v, k) => inter += Math.min(v, y.get(k) || 0)); return tx + ty ? 2 * inter / (tx + ty) : 0; };
+    const list = data.students.filter(s => norm(s.행동).length >= 20).map(s => [s, bigrams(s.행동)]);
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const r = dice(list[i][1], list[j][1]);
+      if (r >= 0.8) for (const [a, b] of [[list[i][0], list[j][0]], [list[j][0], list[i][0]]])
+        add(a, '행동', 1, `${b.번호}번과 행동특성이 ${Math.round(r * 100)}% 비슷함: 학생별 특징 검토`, 0, a.행동.length);
+    }
+  }
+  issues.sort((x, y) => y.sev - x.sev || (x.no || 999) - (y.no || 999));
+  return issues;
+}
+
+// ── 화면 ───────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const badge = sev => `<span class="badge s${sev}">${SEV[sev]}</span>`;
+
+function options() {
+  const o = { mode: $('mode').value, days: +$('days').value || 0,
+    englishOk: $('englishOk').value.split(',').map(w => w.trim()).filter(Boolean),
+    cautionWords: $('cautionWords').value.split(',').map(w => w.trim()).filter(Boolean), plan };
+  document.querySelectorAll('[data-opt]').forEach(el => o[el.dataset.opt] = el.checked);
+  return o;
+}
+
+function highlight(text, list) {
+  const level = new Array(text.length).fill(0), why = Array.from(text, () => []);
+  for (const i of list) if (i.start >= 0) for (let k = i.start; k < Math.min(i.end, text.length); k++) { level[k] = Math.max(level[k], i.sev); why[k].push(i.msg); }
+  let html = '', k = 0;
+  while (k < text.length) {
+    let e = k; while (e < text.length && level[e] === level[k] && why[e].join() === why[k].join()) e++;
+    const chunk = esc(text.slice(k, e));
+    html += level[k] ? `<mark class="m${level[k]}" title="${esc([...new Set(why[k])].join('\n'))}">${chunk}</mark>` : chunk;
+    k = e;
+  }
+  return html;
+}
+
+// 화면 상태. '확인함' 표시는 이 창을 닫으면 사라진다(학생 정보를 브라우저에 남기지 않기 위해).
+// 확인함으로 체크한 항목은 숨기고, '확인한 것도 보기'를 켜면 줄 그은 채로 다시 보여 준다.
+let lastIssues = [];
+const ui = { sev: new Set([3, 2, 1]), view: 'student', pick: 0, onlyFlagged: true, onlyIssues: true, tableStudent: -1, done: new Set(), showDone: false };
+const DISPLAY_ORDER = ['출결특기', '수상', '자율', '동아리', '진로', '창체', '봉사', '교과', '자유학기', '행동'];
+const issueKey = i => `${current.students.indexOf(i.s)}|${i.field}|${i.start}|${i.msg}`;
+const isDone = i => ui.done.has(issueKey(i));
+const inSev = () => lastIssues.filter(i => ui.sev.has(i.sev));
+const visible = () => inSev().filter(i => ui.showDone || !isDone(i));
+
+function run() {
+  if (!current) return;
+  lastIssues = check(current, options());
+  lastIssues.forEach((i, n) => i.id = n);
+  $('result').classList.remove('hidden');
+  $('drop').classList.add('compact');
+  if (ui.pick >= current.students.length) ui.pick = 0;
+  render();
+}
+
+function render() {
+  for (const n of [3, 2, 1]) {
+    $('c' + n).textContent = lastIssues.filter(i => i.sev === n && !isDone(i)).length;
+    document.querySelector(`.chip[data-sev="${n}"]`).classList.toggle('off', !ui.sev.has(n));
+  }
+  const shown = inSev(), done = shown.filter(isDone).length;
+  $('progress').textContent = shown.length ? `확인 ${done} / ${shown.length}` : '';
+  $('showDoneWrap').classList.toggle('hidden', !done);
+  $('showDone').checked = ui.showDone;
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.view === ui.view));
+  $('studentView').classList.toggle('hidden', ui.view !== 'student');
+  $('tableView').classList.toggle('hidden', ui.view !== 'table');
+  if (ui.view === 'student') { renderList(); renderDetail(); } else renderTable();
+}
+
+function counts(s) {
+  const c = { 3: 0, 2: 0, 1: 0 };
+  for (const i of visible()) if (i.s === s && !isDone(i)) c[i.sev]++;
+  return c;
+}
+
+function renderList() {
+  const rows = current.students.map((s, idx) => {
+    const c = counts(s), left = c[3] + c[2] + c[1];
+    const had = inSev().some(i => i.s === s);
+    if (ui.onlyFlagged && !had && idx !== ui.pick) return '';
+    const dots = [3, 2, 1].filter(n => c[n]).map(n => `<span class="dot s${n}" title="${SEV[n]} ${c[n]}건">${c[n]}</span>`).join('');
+    return `<button class="stu${idx === ui.pick ? ' on' : ''}${had && !left ? ' clear' : ''}" data-idx="${idx}">
+      <span class="nm">${esc(s.번호)}. ${esc(s.이름)}</span><span class="dots">${had && !left ? '✓' : dots}</span></button>`;
+  }).join('');
+  $('studentList').innerHTML = `<div class="opt"><label><input type="checkbox" id="onlyFlagged"${ui.onlyFlagged ? ' checked' : ''}> 점검할 학생만</label></div>` +
+    (rows || '<p class="hint" style="padding:10px">표시할 학생이 없습니다.</p>');
+}
+
+function meter(f, text) {
+  const limit = BYTE_LIMIT[f];
+  if (!text) return '';
+  if (f === '수상') return `<span class="meter">${text.split('\n').length}건</span>`;
+  const n = neisBytes(text);
+  if (!limit || f === '교과' || f === '자유학기' || f === '봉사') {
+    const unit = { 교과: '과목별', 자유학기: '영역별', 봉사: '실적별' }[f];
+    return `<span class="meter">${n}Byte${unit ? `<br>한도 ${unit} ${limit}` : ''}</span>`;
+  }
+  return `<span class="meter${n > limit ? ' over' : ''}">${n} / ${limit}Byte <i><span style="width:${Math.min(100, n / limit * 100)}%"></span></i></span>`;
+}
+
+function issueItems(list, cls = '') {
+  if (!list.length) return '';
+  return `<ul class="issues ${cls}">` + list.map(i => `<li data-id="${i.id}" class="${isDone(i) ? 'done' : ''}">
+    <input type="checkbox" class="done-box" data-id="${i.id}" aria-label="확인함"${isDone(i) ? ' checked' : ''}>
+    <span class="lv s${i.sev}" title="${SEV[i.sev]}"></span><span>${esc(i.msg)}</span></li>`).join('') + '</ul>';
+}
+
+function highlight(text, list) {
+  const level = new Array(text.length).fill(0), ids = Array.from(text, () => []);
+  for (const i of list) if (i.start >= 0) for (let k = i.start; k < Math.min(i.end, text.length); k++) {
+    if (!isDone(i)) level[k] = Math.max(level[k], i.sev); else if (!level[k]) level[k] = -1;
+    ids[k].push(i.id);
+  }
+  let html = '', k = 0;
+  while (k < text.length) {
+    let e = k; while (e < text.length && level[e] === level[k] && ids[e].join() === ids[k].join()) e++;
+    const chunk = esc(text.slice(k, e));
+    if (!ids[k].length) html += chunk;
+    else {
+      const why = [...new Set(ids[k].map(id => lastIssues[id].msg))].join('\n');
+      html += `<mark class="${level[k] > 0 ? 'm' + level[k] : 'done'}" data-ids="${ids[k].join(' ')}" title="${esc(why)}">${chunk}</mark>`;
+    }
+    k = e;
+  }
+  return html;
+}
+
+function renderDetail() {
+  const s = current.students[ui.pick];
+  if (!s) { $('detail').innerHTML = ''; return; }
+  const mine = visible().filter(i => i.s === s);
+  const nums = NUM_FIELDS.filter(f => s.present.has(f)).map(f => `${f} <b>${esc(s[f] ?? '·')}</b>`).join('');
+  const general = mine.filter(i => !DISPLAY_ORDER.includes(i.field));
+  // 출결 특기·세특·봉사는 비어 있어도 정상이라, 내용이나 점검 표시가 있을 때만 보여 준다.
+  const optional = new Set(['출결특기', '수상', '교과', '봉사']);
+  // '고칠 곳만 보기'를 켜면 점검 표시가 있는 칸만 보여 줘서 스크롤을 줄인다.
+  const show = f => ui.onlyIssues ? mine.some(i => i.field === f)
+    : (s[f] && s[f].trim()) || mine.some(i => i.field === f) || (s.present.has(f) && !optional.has(f));
+  const fields = DISPLAY_ORDER.filter(show).map(f => {
+    const rel = mine.filter(i => i.field === f), text = s[f] || '';
+    const extra = f === '진로' && s.present.has('희망분야') ? `<div class="hope">희망분야: ${esc(s.희망분야 || '공란')}</div>` : '';
+    return `<div class="field"><div class="lab">${esc(FIELD_LABEL[f])}${meter(f, text)}</div>
+      <div class="cell">${extra}<div class="txt">${text.trim() ? highlight(text, rel) : '<span class="empty">비어 있음</span>'}</div>${issueItems(rel)}</div></div>`;
+  }).join('');
+  const n = current.students.length;
+  $('detail').innerHTML = `<div class="detail-head"><h2>${esc(s.번호)}번 ${esc(s.이름)}</h2>
+      <button class="ghost" data-move="-1" title="키보드 ←"${ui.pick ? '' : ' disabled'}>이전 학생</button>
+      <button class="ghost" data-move="1" title="키보드 →"${ui.pick < n - 1 ? '' : ' disabled'}>다음 학생</button></div>
+    <div class="att">${nums}</div>
+    <label class="chk" style="font-size:13px;margin:0 0 10px"><input type="checkbox" id="onlyIssues"${ui.onlyIssues ? ' checked' : ''}> 고칠 곳만 보기</label>
+    ${issueItems(general, 'general')}${fields ? `<div class="sheet">${fields}</div>` : '<p class="hint">이 학생은 선택한 단계에서 고칠 곳이 없습니다.</p>'}`;
+}
+
+function renderTable() {
+  const sel = $('tableStudent');
+  sel.innerHTML = '<option value="-1">전체 학생</option>' + current.students.map((s, idx) => {
+    const n = visible().filter(i => i.s === s).length;
+    return n ? `<option value="${idx}"${idx === ui.tableStudent ? ' selected' : ''}>${esc(s.번호)}. ${esc(s.이름)} (${n})</option>` : '';
+  }).join('');
+  const shown = visible().filter(i => ui.tableStudent < 0 || i.s === current.students[ui.tableStudent]);
+  $('issueTable').innerHTML = '<tr><th>확인</th><th>번호</th><th>이름</th><th>항목</th><th>단계</th><th>점검 이유</th><th>문맥</th></tr>' +
+    (shown.length ? shown.map(i => `<tr class="row${isDone(i) ? ' done' : ''}" data-id="${i.id}">
+      <td><input type="checkbox" class="done-box" data-id="${i.id}" aria-label="확인함"${isDone(i) ? ' checked' : ''}></td>
+      <td>${esc(i.no)}</td><td>${esc(i.name)}</td><td>${esc(i.label)}</td><td>${badge(i.sev)}</td><td>${esc(i.msg)}</td><td>${esc(i.ctx)}</td></tr>`).join('')
+      : '<tr><td colspan="7">선택한 단계에서 표시할 부분이 없습니다.</td></tr>');
+}
+
+function move(step) {
+  const n = current.students.length;
+  ui.pick = Math.min(n - 1, Math.max(0, ui.pick + step));
+  render();
+  document.querySelector('.stu.on')?.scrollIntoView({ block: 'nearest' });
+}
+
+function status(msg, err) { $('status').innerHTML = msg ? `<div class="msg${err ? ' err' : ''}">${esc(msg)}</div>` : ''; }
+
+function loadSheet(name) {
+  try {
+    current = parseSheet(name);
+    const found = Object.keys(current.cols).filter(k => k !== '번호' && k !== '이름').map(k => FIELD_LABEL[k] || k);
+    status(`학생 ${current.students.length}명을 읽었습니다. 인식한 칸: ${found.join(', ') || '없음'}`);
+    run();
+  } catch (e) { current = null; $('result').classList.add('hidden'); status(e.message, true); }
+}
+
+async function openPdf(file) {
+  if (typeof pdfjsLib === 'undefined') { status('PDF 읽기 도구를 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 새로고침해 주세요.', true); return; }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '../lib/pdf.worker.min.js';
+  status('PDF를 읽는 중입니다…');
+  $('sheetPick').classList.add('hidden');
+  try {
+    const raws = await parsePdf(await file.arrayBuffer());
+    if (!raws.length) throw new Error("'1. 인적·학적사항'으로 시작하는 학생 쪽을 찾지 못했습니다. 나이스 학생부 출력 PDF가 맞는지 확인해 주세요.");
+    current = { title: '', students: pdfStudents(raws), cols: {} };
+    const blank = k => current.students.filter(s => !String(s[k] ?? '').trim()).length;
+    const awards = current.students.reduce((n, s) => n + s.awards.length, 0);
+    status(`학생 ${current.students.length}명을 읽었습니다. 수상 ${awards}건${awards && !plan.length ? '(시상계획을 넣으면 수상명도 대조합니다)' : ''}. 아직 비어 있는 칸: 자율 ${blank('자율')}명 · 동아리 ${blank('동아리')}명 · 진로 ${blank('진로')}명 · 교과 세특 ${blank('교과')}명 · 행특 ${blank('행동')}명`);
+    run();
+  } catch (e) { current = null; $('result').classList.add('hidden'); status('PDF를 읽지 못했습니다: ' + e.message, true); }
+}
+
+async function openFile(file) {
+  if (!file) return;
+  fileName = file.name;
+  ui.done.clear(); ui.pick = 0; ui.tableStudent = -1;
+  if (/\.pdf$/i.test(file.name)) return openPdf(file);
+  if (typeof XLSX === 'undefined') { status('엑셀 읽기 도구를 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 새로고침해 주세요.', true); return; }
+  fileName = file.name;
+  try { workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' }); }
+  catch (e) { status('엑셀 파일을 열지 못했습니다: ' + e.message, true); return; }
+  const usable = workbook.SheetNames.filter(n => { try { return findHeader(sheetGrid(workbook.Sheets[n])); } catch { return false; } });
+  const names = usable.length ? usable : workbook.SheetNames;
+  $('sheet').innerHTML = names.map(n => `<option>${esc(n)}</option>`).join('');
+  $('sheetPick').classList.toggle('hidden', names.length < 2);
+  loadSheet(names[0]);
+}
+
+function download() {
+  const rows = [['번호', '이름', '항목', '단계', '점검 이유', '문맥', '교사 처리', '메모']]
+    .concat(lastIssues.map(i => [i.no, i.name, i.label, SEV[i.sev], i.msg, i.ctx, isDone(i) ? '확인함' : '', '']));
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [6, 10, 22, 10, 50, 40, 12, 20].map(w => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '점검 결과');
+  XLSX.writeFile(wb, fileName.replace(/\.[^.]+$/, '') + '_점검결과.xlsx');
+}
+
+const drop = $('drop');
+drop.onclick = () => $('file').click();
+$('file').onchange = e => openFile(e.target.files[0]);
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); openFile(e.dataTransfer.files[0]); };
+$('sheet').onchange = e => loadSheet(e.target.value);
+$('download').onclick = download;
+document.querySelectorAll('.chip').forEach(el => el.onclick = () => {
+  const n = +el.dataset.sev; ui.sev.has(n) ? ui.sev.delete(n) : ui.sev.add(n); render();
+});
+document.querySelectorAll('.tabs button').forEach(el => el.onclick = () => { ui.view = el.dataset.view; render(); });
+document.querySelectorAll('aside input, aside select, aside textarea').forEach(el => el.addEventListener('change', run));
+$('result').addEventListener('change', e => {
+  if (e.target.id === 'onlyFlagged') { ui.onlyFlagged = e.target.checked; render(); }
+  if (e.target.id === 'onlyIssues') { ui.onlyIssues = e.target.checked; render(); }
+  if (e.target.id === 'showDone') { ui.showDone = e.target.checked; render(); }
+  if (e.target.id === 'tableStudent') { ui.tableStudent = +e.target.value; render(); }
+  if (e.target.classList.contains('done-box')) {
+    const key = issueKey(lastIssues[+e.target.dataset.id]);
+    e.target.checked ? ui.done.add(key) : ui.done.delete(key);
+    render();
+  }
+});
+$('result').addEventListener('click', e => {
+  const stu = e.target.closest('.stu');
+  if (stu) { ui.pick = +stu.dataset.idx; render(); return; }
+  const mv = e.target.closest('[data-move]');
+  if (mv) { move(+mv.dataset.move); return; }
+  const row = e.target.closest('tr.row');
+  if (row && !e.target.classList.contains('done-box')) {
+    const i = lastIssues[+row.dataset.id];
+    ui.pick = current.students.indexOf(i.s); ui.view = 'student'; render();
+    document.querySelector(`mark[data-ids~="${i.id}"]`)?.scrollIntoView({ block: 'center' });
+  }
+});
+// 점검 이유에 마우스를 올리면 본문의 해당 부분에 테두리를 그린다.
+$('result').addEventListener('mouseover', e => {
+  const li = e.target.closest('.issues li');
+  document.querySelectorAll('mark.focus').forEach(m => m.classList.remove('focus'));
+  if (li) document.querySelectorAll(`mark[data-ids~="${li.dataset.id}"]`).forEach(m => m.classList.add('focus'));
+});
+// ── 시상계획 파일 불러오기 ────────────────────────────────────────
+// 어느 형식이든 '수상명' 머리칸이 있는 표를 찾아 '수상명, 부문, 시행 학기, 참가대상' 네 칸 줄로 바꾼다.
+// 합친 칸은 아래 줄까지 같은 값으로 채운 표(grid)를 받는다.
+const PLAN_HEAD = { name: /^(수상명|대회명|상명|시상명|대회\(수상\)명)$/, part: /^(참가)?부문$|^분야$/, term: /시행|학기|시기/, who: /^참가대상/ };
+function planHeader(row) {
+  const h = row.map(v => norm(v));
+  const name = h.findIndex(c => PLAN_HEAD.name.test(c));
+  if (name < 0) return null;
+  const find = k => h.findIndex((c, i) => i !== name && PLAN_HEAD[k].test(c));
+  return { name, part: find('part'), term: find('term'), who: find('who') };
+}
+function gridToPlan(grid) {
+  let col = null, lastName = '';
+  const rows = new Map();
+  for (const row of grid) {
+    const head = planHeader(row);
+    if (head) { col = head; continue; }
+    if (!col) continue;
+    const get = k => col[k] >= 0 ? String(row[col[k]] ?? '').replace(/\s+/g, ' ').trim() : '';
+    let name = get('name');
+    // 부문이 없는 상은 수상명 칸이 부문 칸까지 합쳐져 같은 글이 들어온다.
+    const part = norm(get('part')) === norm(name) ? '' : get('part');
+    if (!name && part) name = lastName;  // 쪽이 바뀌어 수상명 칸이 비어 있는 부문 줄
+    if (!name || /^\d+$/.test(name)) continue;
+    lastName = name;
+    // 같은 상이 학년별로 여러 줄이면 시행 학기와 참가대상을 모은다.
+    const key = norm(name) + '|' + norm(part), r = rows.get(key);
+    if (!r) rows.set(key, { name, part, term: [get('term')].filter(Boolean), who: [get('who')].filter(Boolean) });
+    else { if (get('term') && !r.term.includes(get('term'))) r.term.push(get('term')); if (get('who') && !r.who.includes(get('who'))) r.who.push(get('who')); }
+  }
+  if (!rows.size) return '';
+  // '1학기'와 '1학기, 2학기'처럼 학기만 적힌 칸들은 학기를 합쳐 '1학기, 2학기'로 쓴다.
+  const terms = list => list.every(t => /^[\d\s,·학기]+$/.test(t))
+    ? [...new Set(list.flatMap(t => t.match(/\d/g) || []))].sort().map(n => n + '학기').join(', ') : list.join(', ');
+  return '수상명\t부문\t시행(학기)\t참가대상\n' + [...rows.values()].map(r => [r.name, r.part, terms(r.term), r.who.join(', ')].join('\t')).join('\n');
+}
+
+function excelPlanGrids(buf) {
+  const wb = XLSX.read(buf, { type: 'array' });
+  return wb.SheetNames.map(n => sheetGrid(wb.Sheets[n]).map(row => (row || []).map(headText)));
+}
+
+// hwpx는 압축 파일 안 Contents/sectionN.xml에 표가 들어 있다. 칸마다 행·열 주소와 합친 칸 수가 적혀 있다.
+async function hwpxPlanGrids(buf) {
+  const zip = await JSZip.loadAsync(buf);
+  const secs = Object.keys(zip.files).filter(n => /^Contents\/section\d+\.xml$/i.test(n)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const kid = (el, name) => [...el.children].find(e => e.localName === name);
+  const ownerTable = el => { let p = el.parentNode; while (p && p.localName !== 'tbl') p = p.parentNode; return p; };
+  const grids = [];
+  for (const n of secs) {
+    const doc = new DOMParser().parseFromString(await zip.file(n).async('string'), 'application/xml');
+    for (const tbl of doc.getElementsByTagNameNS('*', 'tbl')) {
+      const grid = [];
+      for (const tc of tbl.getElementsByTagNameNS('*', 'tc')) {
+        if (ownerTable(tc) !== tbl) continue;
+        const addr = kid(tc, 'cellAddr'), span = kid(tc, 'cellSpan');
+        if (!addr) continue;
+        const r = +addr.getAttribute('rowAddr'), c = +addr.getAttribute('colAddr');
+        const rs = +(span && span.getAttribute('rowSpan')) || 1, cs = +(span && span.getAttribute('colSpan')) || 1;
+        const text = [...tc.getElementsByTagNameNS('*', 'p')].map(p => [...p.getElementsByTagNameNS('*', 't')].map(t => t.textContent).join('')).join(' ').trim();
+        for (let i = r; i < r + rs; i++) for (let j = c; j < c + cs; j++) (grid[i] = grid[i] || [])[j] = text;
+      }
+      grids.push(Array.from(grid, row => Array.from(row || [], v => v ?? '')));
+    }
+  }
+  return grids;
+}
+
+// PDF는 칸 선으로 표를 다시 만든다. 부문 칸(부문이 없는 상은 수상명 칸)을 한 줄로 보고,
+// 그 높이를 덮는 다른 열의 칸을 읽는다. 여러 줄을 합친 수상명·학기 칸도 이렇게 읽힌다.
+async function pdfPlanGrids(buf) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '../lib/pdf.worker.min.js';
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const cells = [];
+  for (let p = 1; p <= pdf.numPages; p++)
+    cells.push(...(await pageCells(await pdf.getPage(p))).filter(c => c.boxed && c.text).map(c => ({ ...c, page: p, n: norm(c.text) })));
+  const name = cells.find(c => PLAN_HEAD.name.test(c.n));
+  if (!name) return [];
+  const heads = cells.filter(c => c.page === name.page && c.y0 < name.y1 - 1 && c.y1 > name.y0 + 1);
+  const col = { name };
+  for (const k of ['part', 'term', 'who']) col[k] = heads.find(c => c !== name && PLAN_HEAD[k].test(c.n));
+  const body = cells.filter(c => !heads.includes(c) && (c.page > name.page || c.y0 >= name.y1 - 1));
+  const at = k => c => col[k] && Math.abs(c.x0 - col[k].x0) < 2;
+  const covers = (c, d) => c.page === d.page && c.y0 - 1 <= mid(d)[1] && mid(d)[1] <= c.y1 + 1;
+  // 다른 칸을 품지 않는 가장 작은 칸마다 한 줄을 만든다. 같은 상이 여러 줄로 나오면 gridToPlan이 합친다.
+  const inTable = body.filter(c => ['name', 'part', 'term', 'who'].some(k => at(k)(c)));
+  const anchors = inTable.filter(c => !inTable.some(d => d !== c && covers(c, d) && d.y1 - d.y0 < c.y1 - c.y0 - 1))
+    .sort((a, b) => a.page - b.page || a.y0 - b.y0);
+  const grid = [['수상명', '부문', '시행(학기)', '참가대상']];
+  for (const a of anchors)
+    grid.push(['name', 'part', 'term', 'who'].map(k => body.find(c => at(k)(c) && covers(c, a))?.text || ''));
+  return [grid];
+}
+
+async function loadPlanFile(file) {
+  if (!file) return;
+  $('planMsg').textContent = `${file.name} 읽는 중…`;
+  try {
+    if (/\.hwp$/i.test(file.name)) throw new Error('한글(.hwp) 파일은 바로 읽을 수 없습니다. 한글에서 PDF나 hwpx로 저장한 뒤 넣어 주세요.');
+    const buf = await file.arrayBuffer();
+    const grids = /\.pdf$/i.test(file.name) ? await pdfPlanGrids(buf) : /\.hwpx$/i.test(file.name) ? await hwpxPlanGrids(buf) : excelPlanGrids(buf);
+    const text = gridToPlan(grids.flat());
+    if (!text) throw new Error("'수상명' 머리칸이 있는 표를 찾지 못했습니다. 표를 복사해 위 칸에 붙여 넣어 주세요.");
+    $('planText').value = text;
+    $('planMsg').textContent = `${file.name}에서 상 ${showPlan().length}개를 읽었습니다. 아래 목록이 계획서와 같은지 확인하세요.`;
+  } catch (e) { $('planMsg').textContent = e.message; }
+}
+
+// 시상계획: 학생 정보가 아니라 학교 계획이라 이 브라우저에 저장해 두고 다음에 다시 쓴다.
+// 기본값은 '2026학년도 교내상 운영 계획(안)'의 4. 세부 운영 계획. 고친 계획만 저장하고,
+// 저장 이름에 학년도를 넣어서 내년 파일을 받으면 새 기본 계획이 쓰이게 한다.
+const DEFAULT_PLAN_NAME = '2026학년도 교내상 운영 계획';
+const DEFAULT_PLAN = `연번	수상명	부문	시행(학기)	참가대상
+1	환경문화대상	자유창작그리기 부문	1학기	1,2,3학년 중 참가자
+1	환경문화대상	환경 발명품 만들기 부문	1학기	1,2,3학년 중 참가자
+1	환경문화대상	환경 다큐 소감문 쓰기 부문	2학기	1,2,3학년
+2	분리배출 우수학급상		1학기, 2학기	1,2,3학년
+3	과학의 달 행사	과학용어 문자디자인 부문	1학기	1,2,3학년 중 참가자
+3	과학의 달 행사	과학 시화전 부문	1학기	1,2,3학년 중 참가자
+3	과학의 달 행사	과학 신문 만들기 부문	1학기	1,2,3학년 중 참가자
+3	과학의 달 행사	과학캐릭터그리기부문	1학기	1,2,3학년 중 참가자
+3	과학의 달 행사	과학만화그리기부문	1학기	1,2,3학년 중 참가자
+3	과학의 달 행사	탐구실험 부문	1학기	1,2학년 중 참가자
+3	과학의 달 행사	융합과학 부문	1학기	2,3학년 중 참가자
+3	과학의 달 행사	과학토론 부문	1학기	2,3학년 중 참가자
+4	수학디자인 한마당	수학문자디자인	1학기	1,2,3학년 중 참가자
+4	수학디자인 한마당	수학만화포스터	1학기	1,2,3학년 중 참가자
+4	수학디자인 한마당	수학마인드맵	1학기	1,2,3학년 중 참가자
+5	음식물쓰레기줄이기 표어만들기 대회		1학기	전교생
+6	컴퓨터 꿈나무 대회	SW 부문	1학기	전교생 중 참가자
+6	컴퓨터 꿈나무 대회	프리젠테이션 부문	1학기	전교생 중 참가자
+7	꿈발표대회	프레젠테이션 부문	1학기	전교생 중 참가자
+8	모범상	선행부문	1학기, 2학기	1,2,3학년
+8	모범상	봉사부문	1학기, 2학기	1,2,3학년
+8	모범상	성실부문	1학기, 2학기	1,2,3학년
+9	생활평점제 모범학생상		1학기, 2학기	1,2,3학년
+10	교과우수상		1학기, 2학기	수강자
+11	독후 활동 한마당	감상문 부문	2학기	1,2,3학년 중 참가자
+11	독후 활동 한마당	포스터 부문	2학기	1,2,3학년 중 참가자
+11	독후 활동 한마당	시화 부문	2학기	1,2,3학년 중 참가자
+12	백일장	운문 부문	2학기	1,2,3학년 중 참가자
+12	백일장	산문 부문	2학기	1,2,3학년 중 참가자
+13	다독상		2학기	1,2,3학년
+14	체험학습 소감문 쓰기 대회		1학기, 2학기	1학년·2학년(1학기), 3학년(1·2학기)
+15	수련활동 소감문 쓰기 대회		2학기	1학년
+16	수학여행 소감문 쓰기 대회		2학기	2학년
+17	바른인사실천상		2학기	1,2,3학년
+18	학교 폭력 예방 타이포그래피 대회		2학기	1,2,3학년
+19	아름다운 말 공모전		2학기	1,2,3학년 중 참가자
+20	졸업상	학교장상	2학기	3학년
+20	졸업상	체육상	2학기	3학년
+20	졸업상	예능상	2학기	3학년
+20	졸업상	기능상	2학기	3학년
+20	졸업상	공로상	2학기	3학년
+20	졸업상	선행상	2학기	3학년
+20	졸업상	봉사상	2학기	3학년
+20	졸업상	창의상	2학기	3학년
+20	졸업상	바른 인성상	2학기	3학년
+20	졸업상	3년 개근상	2학기	3학년
+20	졸업상	3년 정근상	2학기	3학년`;
+const PLAN_KEY = 'ilamcheck.awardPlan.2026';
+let plan = [];
+function showPlan() {
+  const list = parsePlan($('planText').value);
+  $('planPreview').innerHTML = list.length
+    ? `<table><tr><th>읽은 수상명 ${list.length}개</th><th>시행 학기</th><th>참가대상</th></tr>` +
+      list.map(p => `<tr><td>${esc(p.name)}</td><td>${esc(p.termText)}</td><td>${esc(p.who)}</td></tr>`).join('') + '</table>'
+    : '<p>붙여 넣으면 여기에 읽은 수상명이 나옵니다. 빠지거나 잘못 읽은 상이 있으면 위 칸에서 고치세요.</p>';
+  return list;
+}
+function applyPlan() {
+  const text = $('planText').value, isDefault = text.trim() === DEFAULT_PLAN.trim();
+  plan = parsePlan(text);
+  try { isDefault ? localStorage.removeItem(PLAN_KEY) : localStorage.setItem(PLAN_KEY, text); } catch {}
+  $('planInfo').textContent = !plan.length ? '넣으면 수상경력의 수상명이 계획과 같은지 봅니다.'
+    : isDefault ? `${DEFAULT_PLAN_NAME}(${plan.length}개)이 들어 있습니다.` : `고친 계획 ${plan.length}개로 봅니다.`;
+  $('planOpen').textContent = plan.length ? '시상계획 보기·고치기' : '시상계획 넣기';
+}
+$('planText').value = DEFAULT_PLAN;
+try { const saved = localStorage.getItem(PLAN_KEY); if (saved !== null) $('planText').value = saved; } catch {}
+applyPlan();
+$('planOpen').onclick = () => { showPlan(); $('planDlg').showModal(); $('planText').focus(); };
+$('planText').addEventListener('input', showPlan);
+$('planClear').onclick = () => { $('planText').value = ''; showPlan(); $('planText').focus(); };
+$('planReset').onclick = () => { $('planText').value = DEFAULT_PLAN; showPlan(); };
+$('planFileBtn').onclick = () => $('planFile').click();
+$('planFile').onchange = e => { loadPlanFile(e.target.files[0]); e.target.value = ''; };
+$('planDone').onclick = () => $('planDlg').close();
+$('planDlg').addEventListener('close', () => { applyPlan(); run(); });
+
+document.addEventListener('keydown', e => {
+  if (!current || ui.view !== 'student' || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) && e.target.type !== 'checkbox') return;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown' && e.target.closest?.('#studentList')) { e.preventDefault(); move(1); }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' && e.target.closest?.('#studentList')) { e.preventDefault(); move(-1); }
+});
+</script>
+</body>
+</html>

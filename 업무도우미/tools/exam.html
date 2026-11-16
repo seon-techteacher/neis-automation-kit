@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>시험지 점검 · 업무도우미</title>
+<meta name="author" content="Kang SeongHo">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../common.css">
+<style>
+.win { --c: var(--c-grade); }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 26px; }
+.stats div { font-size: .85rem; color: var(--muted); }
+.stats b { display: block; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.03em; color: var(--ink); }
+.stats .bad b { color: var(--bad); }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.filters label { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px 3px 6px; font-size: .85rem; font-weight: 700; cursor: pointer; }
+.issues { display: flex; flex-direction: column; gap: 4px; }
+.iss { display: flex; gap: 8px; align-items: baseline; font-size: .9rem; }
+.iss .tag { min-width: 4.6em; text-align: center; }
+td.no { font-weight: 800; white-space: nowrap; }
+td .stem { font-weight: 700; }
+td .chs { color: var(--ink-2); font-size: .84rem; margin-top: 4px; white-space: pre-wrap; }
+tr.clean td.no { color: var(--ok); }
+td.pt { white-space: nowrap; text-align: right; }
+.dist { display: flex; gap: 8px; align-items: flex-end; height: 120px; padding-top: 8px; }
+.dist div { flex: 1; max-width: 70px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: .85rem; height: 100%; justify-content: flex-end; }
+.dist i { display: block; width: 100%; background: var(--c); border-radius: 6px 6px 2px 2px; min-height: 2px; }
+.dist div.off i { background: var(--warn); }
+details > summary { cursor: pointer; font-weight: 700; }
+.fileinfo { font-size: .9rem; color: var(--ink-2); }
+</style>
+<script src="../lib/jszip.min.js"></script>
+<script src="../lib/xlsx.full.min.js"></script>
+<script src="../common.js"></script>
+</head>
+<body>
+<div class="win">
+  <header class="w-head">
+    <h1>시험지 점검</h1>
+    <span class="local">시험지는 이 PC 안에서만 읽고, 저장하지 않아요</span>
+  </header>
+  <section class="w-body">
+    <div class="drop" id="drop"><b>원안지(HWPX)를 여기에 끌어다 놓으세요</b>문항 번호, 배점 합계, 선택지, 부정어 밑줄, 글꼴, 머리말 빈칸을 찾아 드려요. 눌러서 골라도 돼요.<input type="file" id="file" accept=".hwpx,.hwp" hidden></div>
+    <div class="note" id="msg" hidden></div>
+
+    <div id="out" hidden>
+      <p class="fileinfo" id="fileinfo"></p>
+      <div class="stats" id="stats"></div>
+      <div class="issues" id="docIssues"></div>
+      <div class="row">
+        <div class="filters" id="filters">
+          <label><input type="checkbox" value="3" checked><span class="tag m3">필수 점검</span></label>
+          <label><input type="checkbox" value="2" checked><span class="tag m2">확인 필요</span></label>
+          <label><input type="checkbox" value="1" checked><span class="tag m1">개선 권장</span></label>
+        </div>
+        <label class="row small"><input type="checkbox" id="onlyBad"> 확인할 문항만 보기</label>
+        <span class="grow"></span>
+        <button class="btn" id="copyInfo">문항정보표 복사</button>
+        <button class="btn" id="saveInfo">문항정보표 엑셀로</button>
+      </div>
+      <div class="tbl-wrap" style="max-height:none"><table id="tbl"></table></div>
+
+      <h2>정답 분포</h2>
+      <label class="field"><span>정답 (문항 순서대로. 예: 3 1 4 2 5 …)</span><input id="answers" placeholder="정답 번호를 순서대로 넣으면 분포와 연속을 확인해요" inputmode="numeric" autocomplete="off"></label>
+      <div class="note info" id="ansNote" hidden></div>
+      <div class="dist" id="dist" hidden></div>
+
+      <details>
+        <summary>무엇을 점검하나요</summary>
+        <ul class="small muted">
+          <li>머리말: 빨간 빈칸(과목명·날짜·요일·교시·문항 수·쪽수)이 남았는지, 날짜와 요일이 맞는지, 위아래 학년·과목이 같은지, 적힌 문항 수와 실제 문항 수가 같은지</li>
+          <li>양식의 '문항 작성 시 참고 사항' 안내를 지웠는지</li>
+          <li>문항: 자동 번호(문제 스타일)인지, 손으로 친 번호가 있는지, 묶음 문항 [2~3]의 번호가 실제 번호와 맞는지</li>
+          <li>배점: 【3.5점】 표기가 있는지, 표기 모양이 같은지, 합계가 100점인지</li>
+          <li>선택지: ①~⑤가 빠지거나 겹치지 않는지, 같은 선택지가 두 번 있는지</li>
+          <li>부정어(않은·아닌·없는·틀린·다른 것은)에 밑줄이 있는지</li>
+          <li>글꼴: 문제·선택지 스타일과 글꼴·크기가 다른 글자, 자간을 많이 줄인 곳(-15% 이하), 겹친 띄어쓰기</li>
+          <li>총 쪽수는 한글에서 쪽을 나눈 결과라 여기서는 확인할 수 없어요. 한글에서 직접 확인하세요.</li>
+        </ul>
+      </details>
+      <div class="note info row"><span class="grow"><b>한글에서 바로 고치려면</b> 한글 옆에 버튼 창을 띄워 자간·줄 간격, 발문·선택지 서식, 배점, &lt;보기&gt; 상자, 선택지 짧은 순, 기호 넣기를 눌러서 할 수 있어요. 처음에는 '편집 도우미 받기'로 받은 zip을 풀고, 안의 <code>편집 도우미 버튼 연결.cmd</code>를 한 번 실행해 두세요.</span><a class="btn" href="../hangul-helper.zip" download>편집 도우미 받기</a><a class="btn primary" href="udesk-hangul:open">편집 도우미 열기</a></div>
+    </div>
+  </section>
+</div>
+
+<script>
+'use strict';
+const SEV = { 3: '필수 점검', 2: '확인 필요', 1: '개선 권장' };
+const CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩';
+const SCORE = /【\s*(\d+(?:\.\d+)?)\s*점\s*】/;
+const SCORE_ODD = /[\[(（〔]\s*(\d+(?:\.\d+)?)\s*점\s*[\])）〕]/;
+const GROUP = /^\s*[\[［]\s*(\d+)\s*[~∼～\-–]\s*(\d+)\s*[\]］]/;
+// 부정 발문: 뒤에 '것은·질문은'처럼 묻는 말이 올 때만 본다('틀린 부분을 고친 것은'은 부정 발문이 아니다).
+// '적절하지 않은'은 '않은'에만 밑줄을 긋는 것이 보통이라 부정어 낱말만 본다.
+const NEG = /(않은|않는|아닌|없는|틀린|다른)(?=\s*(?:것|질문|문장|대화|단어|표현|설명|내용|곳|말)\s*(?:은|는|이|을|만)?)/g;
+let last = null;
+
+// ═════════ HWPX 읽기 ═════════
+const attr = (el, n) => el.getAttribute(n);
+const kids = (el, name) => [...el.children].filter(c => c.localName === name);
+function tText(t) {
+  let s = '';
+  for (const n of t.childNodes) {
+    if (n.nodeType === 3) s += n.data;
+    else if (n.localName === 'tab') s += '\t';
+    else if (n.localName === 'lineBreak') s += '\n';
+    else s += n.textContent || '';
+  }
+  return s;
+}
+// 문단을 차례대로 펼친다. 표·글상자·머리말 안의 문단은 depth가 1 이상이다.
+function readPara(p, depth, out) {
+  const e = { depth, style: +attr(p, 'styleIDRef'), paraPr: +attr(p, 'paraPrIDRef'), runs: [], text: '' };
+  out.push(e);
+  const visit = el => {
+    for (const c of el.children) {
+      if (c.localName === 'p') { readPara(c, depth + 1, out); continue; }
+      if (c.localName === 'run') {
+        const cp = +attr(c, 'charPrIDRef'); let t = '';
+        for (const x of c.children) { if (x.localName === 't') t += tText(x); else visit(x); }
+        if (t) e.runs.push({ cp, text: t });
+        continue;
+      }
+      visit(c);
+    }
+  };
+  visit(p);
+  e.text = e.runs.map(r => r.text).join('');
+}
+async function readHwpx(file) {
+  if (extOf(file.name) === 'hwp') throw new Error('HWP 파일은 읽지 못해요. 한글에서 [파일] → [다른 이름으로 저장]을 눌러 형식을 HWPX로 바꿔 저장한 뒤 넣어 주세요.');
+  let zip;
+  try { zip = await JSZip.loadAsync(file); } catch { throw new Error('HWPX 파일을 열지 못했어요. 한글에서 HWPX로 저장한 파일인지 확인해 주세요.'); }
+  const manifest = zip.file('META-INF/manifest.xml');
+  if (manifest && /encryption-data/.test(await manifest.async('string')))
+    throw new Error('문서 암호가 걸려 있어 읽을 수 없어요. 한글에서 [보안] → [문서 암호 설정]으로 암호를 지운 사본을 저장해 넣어 주세요.');
+  const xml = async name => new DOMParser().parseFromString(await zip.file(name).async('string'), 'application/xml');
+  const head = await xml('Contents/header.xml');
+  const H = { fonts: {}, charPr: {}, paraPr: {}, styles: {} };
+  for (const ff of head.getElementsByTagNameNS('*', 'fontface')) {
+    const lang = attr(ff, 'lang');
+    for (const f of kids(ff, 'font')) H.fonts[lang + attr(f, 'id')] = attr(f, 'face');
+  }
+  for (const c of head.getElementsByTagNameNS('*', 'charPr')) {
+    const fr = kids(c, 'fontRef')[0], sp = kids(c, 'spacing')[0], ul = kids(c, 'underline')[0];
+    H.charPr[attr(c, 'id')] = {
+      size: +attr(c, 'height') / 100,
+      font: fr ? H.fonts['HANGUL' + attr(fr, 'hangul')] : '', latin: fr ? H.fonts['LATIN' + attr(fr, 'latin')] : '',
+      bold: kids(c, 'bold').length > 0, ul: !!ul && attr(ul, 'type') !== 'NONE', spacing: sp ? +attr(sp, 'hangul') : 0,
+    };
+  }
+  for (const p of head.getElementsByTagNameNS('*', 'paraPr')) {
+    const h = kids(p, 'heading')[0];
+    H.paraPr[attr(p, 'id')] = { heading: h ? attr(h, 'type') : 'NONE', numId: h ? attr(h, 'idRef') : '0', level: h ? +attr(h, 'level') : 0 };
+  }
+  for (const s of head.getElementsByTagNameNS('*', 'style')) H.styles[attr(s, 'id')] = { name: attr(s, 'name'), charPr: attr(s, 'charPrIDRef'), type: attr(s, 'type') };
+  const names = Object.keys(zip.files).filter(n => /^Contents\/section\d+\.xml$/.test(n)).sort((a, b) => +a.match(/\d+/)[0] - +b.match(/\d+/)[0]);
+  const paras = [];
+  for (const n of names) { const d = await xml(n); for (const p of kids(d.documentElement, 'p')) readPara(p, 0, paras); }
+  return { H, paras };
+}
+
+// ═════════ 점검 ═════════
+const styleId = (H, name) => Object.keys(H.styles).find(k => H.styles[k].name === name);
+const fontLabel = c => c ? `${c.font}${c.latin && c.latin !== c.font ? '/' + c.latin : ''} ${c.size}pt` : '?';
+const norm = s => s.replace(/\s+/g, '');
+const WEEK = '일월화수목금토';
+
+function analyse({ H, paras }) {
+  const docIssues = [], qs = [];
+  const addDoc = (sev, msg) => docIssues.push({ sev, msg });
+  const isQ = e => e.depth === 0 && (H.paraPr[e.paraPr] || {}).heading === 'NUMBER' && e.text.trim() !== '';
+  const qIdx = paras.map((e, i) => isQ(e) ? i : -1).filter(i => i >= 0);
+  const firstQ = qIdx.length ? qIdx[0] : paras.length;
+  const headText = paras.slice(0, firstQ).map(e => e.text).join('\n');
+  const allText = paras.map(e => e.text).join('\n');
+  const sQ = styleId(H, '문제'), sC = styleId(H, '선택지');
+  const refQ = H.charPr[sQ ? H.styles[sQ].charPr : ''], refC = H.charPr[sC ? H.styles[sC].charPr : ''];
+
+  // ── 머리말과 양식 안내
+  if (/문항\s*작성\s*시\s*참고\s*사항|스타일\s*사용\s*방법|\[방법\]|출제\s*관련\s*설명/.test(allText))
+    addDoc(3, "양식의 '문항 작성 시 참고 사항' 안내가 남아 있어요. 출제할 때는 지워야 해요.");
+  const holes = ['과목명', '전체 문항 수', '총 쪽수', '날짜일', '요일요일', '교시교시'].filter(w => headText.includes(w));
+  if (holes.length) addDoc(3, `머리말·꼬리말 빈칸이 그대로예요: ${holes.join(', ')}`);
+  if (/출제\s*교사\s*[:：]\s*\(인\)/.test(headText)) addDoc(2, '출제 교사 이름이 비어 있어요.');
+  const date = headText.match(/(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*\(\s*([월화수목금토일])/);
+  if (date) {
+    const d = new Date(+date[1], +date[2] - 1, +date[3]), real = WEEK[d.getDay()];
+    if (d.getMonth() !== +date[2] - 1) addDoc(3, `실시일 ${date[2]}월 ${date[3]}일은 없는 날짜예요.`);
+    else if (real !== date[4]) addDoc(3, `실시일 ${date[1]}년 ${date[2]}월 ${date[3]}일은 ${real}요일인데 ${date[4]}요일로 적혀 있어요.`);
+  }
+  const subj = headText.match(/과\s*목\s*[:：]\s*\[\s*([^\]]*?)\s*\]/), grade = headText.match(/해당\s*학년\s*[:：]\s*\(\s*([^)]*?)\s*\)/);
+  const foot = headText.match(/\(\s*([^()]*?)\s*\)\s*학년\s*\(\s*([^()]*?)\s*\)\s*과\s*\(\s*([^()]*?)\s*\)\s*쪽/);
+  if (foot && !/학년|과목명|쪽수/.test(foot[0].replace(/\)\s*학년|\)\s*과|\)\s*쪽/g, ''))) {
+    if (grade && norm(grade[1]) && norm(foot[1]) && norm(grade[1]) !== norm(foot[1])) addDoc(3, `학년이 위(${grade[1]})와 아래 꼬리말(${foot[1]})에서 달라요.`);
+    if (subj && norm(subj[1]) && norm(foot[2]) && norm(subj[1]) !== norm(foot[2])) addDoc(3, `과목이 위([${subj[1]}])와 아래 꼬리말(${foot[2]})에서 달라요.`);
+  }
+  const pages = foot && /^\d+$/.test(norm(foot[3])) ? +norm(foot[3]) : null;
+  const nSel = (headText.match(/선택형\s*\(\s*(\d+)\s*\)\s*문항/) || [])[1], nWrite = (headText.match(/서답형\s*\(\s*(\d+)\s*\)\s*문항/) || [])[1];
+
+  // ── 묶음 문항 머리말 위치
+  const groups = paras.map((e, i) => { const m = e.text.match(GROUP); return m ? { i, a: +m[1], b: +m[2], text: e.text.trim() } : null; }).filter(Boolean);
+  const isGroupAt = new Set(groups.map(g => g.i));
+
+  // ── 문항별
+  qIdx.forEach((qi, k) => {
+    const e = paras[qi], no = k + 1, issues = [];
+    const add = (sev, msg) => issues.push({ sev, msg });
+    const end = k + 1 < qIdx.length ? qIdx[k + 1] : paras.length;
+    let stop = end;
+    for (let j = qi + 1; j < end; j++) if (isGroupAt.has(j)) { stop = j; break; }
+    const body = paras.slice(qi + 1, stop);
+
+    if (sQ && String(e.style) !== sQ) add(2, `'문제' 스타일이 아니에요(지금: ${(H.styles[e.style] || {}).name || '?'}).`);
+    if (/^\s*\d{1,2}\s*[.)]\s*\S/.test(e.text)) add(3, '문항 앞에 번호를 손으로 쳤어요. 자동 번호와 겹쳐 보여요.');
+
+    // 배점: 발문 안 → 없으면 첫 선택지 전까지
+    let point = null, pointAt = e.text;
+    let m = e.text.match(SCORE);
+    if (!m) for (const b of body) { if (/[①-⑩]/.test(b.text)) break; const mm = b.text.match(SCORE); if (mm) { m = mm; pointAt = b.text; break; } }
+    if (m) point = +m[1];
+    else {
+      const odd = [e.text, ...body.slice(0, 3).map(b => b.text)].join(' ').match(SCORE_ODD);
+      if (odd) { point = +odd[1]; add(2, `배점을 ${odd[0]}로 적었어요. 다른 문항처럼 【${odd[1]}점】으로 맞추세요.`); }
+      else add(3, '배점(【n점】)이 없어요.');
+    }
+
+    // 선택지
+    const choiceParas = body.filter(b => /[①-⑩]/.test(b.text));
+    const seq = choiceParas.map(b => b.text).join('\n').match(/[①-⑩]/g) || [];
+    const want = CIRCLED.slice(0, 5).split('');
+    if (!seq.length) add(3, '선택지 ①~⑤를 찾지 못했어요.');
+    else if (seq.join('') !== want.join('')) {
+      const miss = want.filter(c => !seq.includes(c)), dup = [...new Set(seq.filter((c, i) => seq.indexOf(c) !== i))], extra = seq.filter(c => !want.includes(c));
+      const bits = [];
+      if (miss.length) bits.push(`${miss.join('')} 빠짐`);
+      if (dup.length) bits.push(`${dup.join('')} 두 번`);
+      if (extra.length) bits.push(`${[...new Set(extra)].join('')} 있음`);
+      if (!bits.length) bits.push(`순서가 ${seq.join('')}`);
+      add(3, `선택지 번호: ${bits.join(', ')}`);
+    }
+    // 같은 선택지 두 번
+    const chText = choiceParas.map(b => b.text).join('\n');
+    const pieces = chText.split(/([①-⑩])/).slice(1);
+    const choices = [];
+    for (let i = 0; i < pieces.length; i += 2) choices.push({ mark: pieces[i], text: (pieces[i + 1] || '').replace(/\s+/g, ' ').trim() });
+    const seen = {};
+    for (const c of choices) { const key = norm(c.text).replace(/[.]$/, ''); if (!key) continue; if (seen[key]) add(3, `선택지 ${seen[key]}와 ${c.mark}의 내용이 같아요.`); else seen[key] = c.mark; }
+
+    // 부정어 밑줄
+    let pos = 0; const spans = e.runs.map(r => { const s = { a: pos, b: pos + r.text.length, cp: H.charPr[r.cp] }; pos = s.b; return s; });
+    for (const mm of e.text.matchAll(NEG)) {
+      const a = mm.index, b = a + mm[0].length;
+      const covered = spans.filter(s => s.b > a && s.a < b && e.text.slice(Math.max(s.a, a), Math.min(s.b, b)).trim());
+      if (!covered.every(s => s.cp && s.cp.ul)) add(3, `부정어 '${mm[0]}'에 밑줄이 없어요.`);
+    }
+
+    // 글꼴
+    const fontOff = new Map(), squeezed = new Set();
+    const checkRuns = (runs, ref, what) => {
+      if (!ref) return;
+      for (const r of runs) {
+        if (!r.text.trim()) continue;
+        const c = H.charPr[r.cp]; if (!c) continue;
+        if (c.font !== ref.font || c.size !== ref.size) fontOff.set(`${what}: ${fontLabel(c)} (기준 ${fontLabel(ref)})`, 1);
+        if (c.spacing <= -15) squeezed.add(c.spacing);
+      }
+    };
+    checkRuns(e.runs, refQ, '발문');
+    for (const b of body) if (sC && String(b.style) === sC) checkRuns(b.runs, refC, '선택지');
+    for (const k2 of fontOff.keys()) add(2, `글꼴이 달라요 ${k2}`);
+    if (squeezed.size) add(1, `자간을 ${Math.min(...squeezed)}%까지 줄인 곳이 있어요. 글자가 붙어 보이는지 확인하세요.`);
+
+    // 띄어쓰기
+    const stemCore = e.text.replace(SCORE, '').replace(/\s+$/, '');
+    if (/\S {2,}\S/.test(stemCore)) add(1, '발문에 띄어쓰기가 두 칸 이상인 곳이 있어요.');
+    if (/\s\?/.test(stemCore)) add(1, "물음표 앞에 빈칸이 있어요.");
+    for (const b of choiceParas) if (/^\s+[①-⑩]/.test(b.text) && b.depth === 0) { add(1, '선택지 번호 앞에 빈칸이 있어요.'); break; }
+
+    qs.push({ no, stem: e.text.replace(SCORE, '').trim(), point, choices, issues, refsAbove: /윗\s*글|위\s*글|위\s*대화|윗\s*대화|위의\s*글/.test(e.text), qi });
+  });
+
+  // ── 묶음 문항 번호
+  for (const g of groups) {
+    const nextQ = qs.find(q => q.qi > g.i);
+    if (g.b < g.a) addDoc(3, `${g.text.slice(0, 12)}: 앞 번호가 뒤 번호보다 커요.`);
+    else if (!nextQ) addDoc(2, `${g.text.slice(0, 12)} 뒤에 문항이 없어요.`);
+    else if (nextQ.no !== g.a) addDoc(3, `'${g.text.match(GROUP)[0].trim()}'라고 적었는데 바로 뒤 문항은 ${nextQ.no}번이에요. 번호를 고치세요.`);
+    else if (g.b > qs.length) addDoc(3, `'${g.text.match(GROUP)[0].trim()}'의 ${g.b}번 문항이 없어요.`);
+  }
+  for (const q of qs) if (q.refsAbove && !groups.some(g => g.a <= q.no && q.no <= g.b))
+    q.issues.push({ sev: 2, msg: "'윗글·위 대화'를 묻는데 [n~m] 묶음 안에 없어요. 묶음 번호를 확인하세요." });
+
+  // ── 합계
+  const total = Math.round(qs.reduce((s, q) => s + (q.point || 0), 0) * 100) / 100;
+  if (qs.length && total !== 100) addDoc(3, `배점 합계가 ${total}점이에요(100점이 아님).`);
+  const nStated = (nSel ? +nSel : 0) + (nWrite ? +nWrite : 0);
+  if (nSel && nStated !== qs.length) addDoc(3, `머리말에는 ${nWrite ? `선택형 ${nSel} + 서답형 ${nWrite}` : `선택형 ${nSel}`}문항인데, 찾은 문항은 ${qs.length}개예요.`);
+  if (!qs.length) addDoc(3, "자동 번호가 붙은 문항을 찾지 못했어요. 문항에 '문제' 스타일(Ctrl+2)을 썼는지 확인하세요.");
+  for (const q of qs) q.issues.sort((a, b) => b.sev - a.sev);
+  docIssues.sort((a, b) => b.sev - a.sev);
+  return { qs, docIssues, total, pages, nStated, subject: subj ? subj[1] : '', grade: grade ? grade[1] : '' };
+}
+
+// ═════════ 화면 ═════════
+const sevOn = () => new Set([...$('filters').querySelectorAll('input:checked')].map(i => +i.value));
+const issueHTML = i => `<div class="iss"><span class="tag m${i.sev}">${SEV[i.sev]}</span><span>${esc(i.msg)}</span></div>`;
+function render() {
+  if (!last) return;
+  const { qs, docIssues, total, pages, name } = last, on = sevOn();
+  const flagged = qs.filter(q => q.issues.some(i => on.has(i.sev))).length;
+  $('fileinfo').textContent = `${name}${last.subject ? ` · ${last.subject}` : ''}${last.grade ? ` · ${last.grade}학년` : ''}${pages ? ` · 꼬리말의 총 쪽수 ${pages}쪽(한글에서 실제 쪽수 확인)` : ''}`;
+  $('stats').innerHTML = `<div>문항<b class="num">${qs.length}개</b></div><div class="${total !== 100 ? 'bad' : ''}">배점 합계<b class="num">${total}점</b></div>
+    <div class="${docIssues.length ? 'bad' : ''}">문서 전체<b class="num">${docIssues.length}건</b></div><div class="${flagged ? 'bad' : ''}">확인할 문항<b class="num">${flagged}개</b></div>`;
+  $('docIssues').innerHTML = docIssues.filter(i => on.has(i.sev)).map(issueHTML).join('');
+  const rows = qs.filter(q => !$('onlyBad').checked || q.issues.some(i => on.has(i.sev)));
+  $('tbl').innerHTML = '<tr><th>번호</th><th>발문과 선택지</th><th class="r">배점</th><th>확인할 점</th></tr>' + rows.map(q => {
+    const list = q.issues.filter(i => on.has(i.sev));
+    return `<tr class="${list.length ? '' : 'clean'}"><td class="no">${q.no}</td><td><div class="stem">${esc(q.stem)}</div><div class="chs">${esc(q.choices.map(c => c.mark + ' ' + c.text).join('\n'))}</div></td>
+      <td class="pt num">${q.point ?? '-'}</td><td><div class="issues">${list.length ? list.map(issueHTML).join('') : '<span class="pill ok">이상 없음</span>'}</div></td></tr>`;
+  }).join('');
+  renderAnswers();
+}
+function parseAnswers() {
+  const v = $('answers').value.replace(/[①-⑤]/g, c => ' ' + (CIRCLED.indexOf(c) + 1) + ' ');
+  return (v.match(/[1-5]/g) || []).map(Number);
+}
+function renderAnswers() {
+  const a = parseAnswers(), n = last.qs.length, note = $('ansNote'), dist = $('dist');
+  if (!a.length) { note.hidden = dist.hidden = true; return; }
+  const cnt = [1, 2, 3, 4, 5].map(k => a.filter(x => x === k).length), avg = a.length / 5, msgs = [];
+  if (a.length !== n) msgs.push(`정답이 ${a.length}개예요. 문항은 ${n}개예요.`);
+  cnt.forEach((c, i) => { if (c === 0) msgs.push(`${CIRCLED[i]}이 정답인 문항이 없어요.`); else if (a.length >= 10 && c > avg * 1.6) msgs.push(`${CIRCLED[i]}이 ${c}개로 많아요.`); });
+  let run = 1;
+  for (let i = 1; i <= a.length; i++) {
+    if (i < a.length && a[i] === a[i - 1]) run++;
+    else { if (run >= 3) msgs.push(`${i - run + 1}~${i}번 정답이 모두 ${CIRCLED[a[i - 1] - 1]}이에요.`); run = 1; }
+  }
+  note.hidden = false;
+  note.innerHTML = msgs.length ? `<b>확인하세요.</b> ${esc(msgs.join(' '))}` : `<b>고르게 나뉘었어요.</b> ${cnt.map((c, i) => CIRCLED[i] + ' ' + c + '개').join(', ')}`;
+  const top = Math.max(...cnt, 1);
+  dist.hidden = false;
+  dist.innerHTML = cnt.map((c, i) => `<div class="${c === 0 || (a.length >= 10 && c > avg * 1.6) ? 'off' : ''}"><b class="num">${c}</b><i style="height:${Math.round(c / top * 80)}%"></i><span>${CIRCLED[i]}</span></div>`).join('');
+}
+function infoRows() {
+  const a = parseAnswers();
+  return [['문항', '배점', '정답', '발문'], ...last.qs.map((q, i) => [q.no, q.point ?? '', a[i] ?? '', q.stem])];
+}
+
+async function openFile(file) {
+  $('msg').hidden = true; $('out').hidden = true;
+  try {
+    const doc = await readHwpx(file);
+    last = { ...analyse(doc), name: file.name };
+    $('out').hidden = false; render();
+  } catch (err) {
+    $('msg').hidden = false; $('msg').innerHTML = `<b>읽지 못했어요.</b> ${esc(err.message || err)}`;
+  }
+}
+dropZone($('drop'), $('file'), f => openFile(f[0]));
+$('filters').addEventListener('change', render);
+$('onlyBad').addEventListener('change', render);
+$('answers').addEventListener('input', () => last && renderAnswers());
+$('copyInfo').addEventListener('click', () => copyText(infoRows().map(r => r.join('\t')).join('\n'), '문항정보표를 복사했어요. 엑셀에 붙여 넣으세요.'));
+$('saveInfo').addEventListener('click', () => {
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(infoRows()), '문항정보표');
+  saveBlob(new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })]), baseName(last.name) + '_문항정보표.xlsx');
+});
+</script>
+</body>
+</html>

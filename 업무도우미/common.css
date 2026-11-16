@@ -1,0 +1,98 @@
+/* 업무도우미 공통 스타일 · © 2026 Kang SeongHo
+   좁은 패널(index.html)과 큰 작업 창(tools/*.html)이 함께 쓴다. 도구 분류는 네 가지 색으로 구분한다. */
+:root {
+  --bg: #e9edf1; --surface: #fbfcfd; --sunk: #eef1f5; --ink: #141d27; --ink-2: #3b4855; --muted: #66727f;
+  --line: #d6dce3; --accent: #1f3fae; --accent-ink: #ffffff; --accent-soft: #e3e9fa;
+  --c-record: #1f3fae; --c-class: #1d7a55; --c-doc: #a8620c; --c-grade: #7a3a8f;
+  --hl-red: #ffc2bc; --hl-orange: #ffd9a3; --hl-yellow: #fff08a;
+  --ok: #1d7a55; --ok-soft: #dff1e8; --warn: #a8620c; --warn-soft: #fbeed9; --bad: #b3352b; --bad-soft: #fbe3e0;
+  --font: "Pretendard Variable", Pretendard, "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1419; --surface: #182029; --sunk: #202a35; --ink: #e8edf2; --ink-2: #c0cad4; --muted: #8b98a5;
+  --line: #2c3743; --accent: #8fa6ff; --accent-ink: #0c1330; --accent-soft: #222f55;
+  --c-record: #8fa6ff; --c-class: #63c79c; --c-doc: #e6ad5c; --c-grade: #c992dc;
+  --hl-red: #6b302c; --hl-orange: #66481d; --hl-yellow: #5b5318;
+  --ok: #63c79c; --ok-soft: #1c3a2d; --warn: #e6ad5c; --warn-soft: #3a2c15; --bad: #f08a80; --bad-soft: #40211e; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f1419; --surface: #182029; --sunk: #202a35; --ink: #e8edf2; --ink-2: #c0cad4; --muted: #8b98a5;
+  --line: #2c3743; --accent: #8fa6ff; --accent-ink: #0c1330; --accent-soft: #222f55;
+  --c-record: #8fa6ff; --c-class: #63c79c; --c-doc: #e6ad5c; --c-grade: #c992dc;
+  --hl-red: #6b302c; --hl-orange: #66481d; --hl-yellow: #5b5318;
+  --ok: #63c79c; --ok-soft: #1c3a2d; --warn: #e6ad5c; --warn-soft: #3a2c15; --bad: #f08a80; --bad-soft: #40211e; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+button, select, textarea, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { opacity: .45; cursor: default; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+h1, h2, h3, p { margin: 0; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.small { font-size: .85rem; }
+
+input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]), select, textarea {
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 6px 9px; min-width: 0;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+textarea { resize: vertical; line-height: 1.7; }
+input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-weight: 700; font-size: .88rem; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; color: var(--ink); }
+.btn:hover:not(:disabled) { border-color: var(--ink-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.big { padding: 9px 16px; font-size: .95rem; }
+.btn svg { width: 15px; height: 15px; }
+.link { border: 0; background: none; color: var(--accent); font-weight: 700; font-size: .85rem; padding: 2px 4px; }
+.link:hover { text-decoration: underline; }
+.pill { font-size: .76rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; display: inline-block; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); } .pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); } .pill.flat { background: var(--sunk); color: var(--muted); }
+.tag { flex: none; font-size: .72rem; font-weight: 800; padding: 1px 7px; border-radius: 4px; color: var(--ink); }
+.m3 { background: var(--hl-red); } .m2 { background: var(--hl-orange); } .m1 { background: var(--hl-yellow); }
+mark { color: inherit; border-radius: 3px; padding: 1px 2px; }
+.note { background: var(--warn-soft); border-radius: 10px; padding: 10px 14px; font-size: .9rem; }
+.note b { color: var(--warn); }
+.note.info { background: var(--accent-soft); } .note.info b { color: var(--accent); }
+.meter { display: flex; align-items: center; gap: 10px; }
+.meter .track { flex: 1; height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; }
+.meter .track span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 4px; transition: width .2s; }
+.meter .track span.near { background: var(--warn); } .meter .track span.over { background: var(--bad); }
+.meter b { font-size: .9rem; white-space: nowrap; }
+
+/* ── 큰 작업 창 공통 ── */
+.win { min-height: 100%; display: flex; flex-direction: column; background: var(--surface); }
+.w-head { display: flex; align-items: center; gap: 6px 18px; padding: 14px max(20px, env(safe-area-inset-right, 0px)) 0 max(20px, env(safe-area-inset-left, 0px)); flex-wrap: wrap; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); z-index: 5; }
+.w-head h1 { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.w-head h1::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--c, var(--accent)); }
+.w-tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+.w-tabs button { border: 0; background: none; padding: 6px 12px 12px; font-weight: 700; color: var(--muted); border-bottom: 3px solid transparent; }
+.w-tabs button.on { color: var(--c, var(--accent)); border-bottom-color: var(--c, var(--accent)); }
+.w-head .local { margin-left: auto; margin-bottom: 12px; font-size: .8rem; color: var(--muted); }
+.w-body { padding: 20px max(20px, env(safe-area-inset-right, 0px)) 40px max(20px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 16px; max-width: 1200px; width: 100%; }
+.w-body h2 { font-size: 1rem; font-weight: 800; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.grow { flex: 1; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field > span { font-weight: 700; font-size: .88rem; color: var(--ink-2); }
+.field textarea { min-height: 200px; width: 100%; }
+.drop { border: 2px dashed var(--line); border-radius: 12px; padding: 22px 16px; text-align: center; color: var(--muted); cursor: pointer; background: var(--sunk); }
+.drop:hover, .drop.over { border-color: var(--c, var(--accent)); color: var(--ink); }
+.drop b { color: var(--ink); display: block; font-size: 1rem; }
+.tbl-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; max-height: 60vh; }
+table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: .78rem; color: var(--muted); font-weight: 700; background: var(--sunk); white-space: nowrap; position: sticky; top: 0; }
+td.r, th.r { text-align: right; white-space: nowrap; }
+td small { display: block; color: var(--muted); font-size: .82rem; }
+td.err { background: var(--bad-soft); }
+.out { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; white-space: pre-wrap; word-break: break-all; background: var(--surface); min-height: 80px; max-height: 60vh; overflow: auto; }
+.toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 16px); z-index: 100; background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 10px; font-size: .9rem; opacity: 0; pointer-events: none; transition: .2s; max-width: 90vw; text-align: center; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }

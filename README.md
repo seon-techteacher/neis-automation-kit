@@ -178,3 +178,14 @@ cd neis-automation-kit
 ## 라이선스
 
 MIT. 자유롭게 쓰고 고치셔도 됩니다. 다만 **사용에 따른 책임은 쓰는 사람에게 있습니다.**
+
+### 함께 들어 있는 «업무도우미» — MIT 가 아닙니다
+
+`업무도우미/` 폴더는 **Kang SeongHo 선생님이 만든 «업무도우미»** 입니다 (© 2026 Kang SeongHo. All rights reserved).
+위젯의 [업무도우미] 단추가 이 폴더의 `plus.html` 을 엽니다. 만든 분의 허락을 받아 함께 담았습니다.
+
+- 이 폴더는 키트의 MIT 라이선스가 **적용되지 않습니다.** 조건은 `업무도우미/LICENSE` 를 따릅니다
+  (비영리 사용·출처 표시 공유는 허락, **판매·유료 서비스·수정본 배포는 만든 분의 허락이 필요**)
+- 출처 표기(«Kang SeongHo»)를 지우지 마세요
+- 원본과 최신판: [pinggu5224.github.io/teachertool](https://pinggu5224.github.io/teachertool/)
+- 학교 기본값 파일(`school.default.js`)은 학교 정보가 들어 있어 이 저장소에는 넣지 않았습니다 (어느 화면도 읽지 않습니다)

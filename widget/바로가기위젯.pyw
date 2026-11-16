@@ -46,7 +46,12 @@ BG, INK, LINE = "#fffaf2", "#3b2f25", "#d9ccb8"
 BTNS = [("나이스", "neis", "open", "#1b6fb5"), ("에듀파인", "edufine", "main", "#2f7d4f"),
         ("문서등록대장", "edufine", "open", "#8a5a2b"), ("공람", "edufine", "cnrs", "#6b4fb5"),
         ("상벌점", "green", "form", "#b5651d"),
-        ("복무", "bokmu", "form", "#c2417a")]   # [검수] 단추는 선생님 요청으로 뺐다 (2026-11-16)
+        ("복무", "bokmu", "form", "#c2417a"),   # [검수] 단추는 선생님 요청으로 뺐다 (2026-11-16)
+        ("업무도우미", "web", "open", "#1f3fae")]
+# 다른 분이 만든 도구 (업무도우미 © 2026 Kang SeongHo — 비영리·출처 표시, 판매·수정본 배포는 허락 필요)
+# 키트 폴더의 «업무도우미\plus.html»(만든 분 저장소를 통째로 받은 폴더 + 좁은 패널판)이 있으면 그걸 열고, 없으면 만든 분 사이트를 연다
+WEB_LINKS = {"업무도우미": "https://pinggu5224.github.io/teachertool/"}
+LOCAL_PAGES = {"업무도우미": HERE.parent / "업무도우미" / "plus.html"}
 GREEN = HERE / "상벌점사이트_엔진.py"              # 학교 상벌점 사이트 (아이디·비밀번호 로그인)
 GREEN_SETUP = HERE / "상벌점사이트_설정.py"
 GREEN_INPUT = HERE / "상벌점사이트_입력.py"         # [상벌점] 입력 창이 부른다 (목록 · 학생 · 넣기)
@@ -424,6 +429,22 @@ class Widget:
         return last
 
     def click(self, site, cmd, text):
+        if site == "web":                    # 웹 도구 — 인증서·로그인 없이 연다 (일하는 중이어도 된다)
+            local = LOCAL_PAGES.get(text)
+            url = local.as_uri() if local and local.exists() else WEB_LINKS[text]   # 이 PC 에 받아 둔 판이 있으면 그것
+            chrome = next((str(p) for p in (Path(os.environ.get(v, "")) / "Google" / "Chrome" / "Application" / "chrome.exe"
+                                            for v in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA") if os.environ.get(v))
+                           if p.exists()), None)
+            try:
+                if chrome:                   # 평소 쓰는 크롬(선생님 프로필)으로 — 기본 브라우저가 엣지여도 (2026-11-16 요청)
+                    subprocess.Popen([chrome, url], close_fds=True)
+                else:
+                    import webbrowser
+                    webbrowser.open(url)
+                self.say("%s 열었어요" % text, "#2f7d4f")
+            except Exception as e:
+                self.say("앗, 못 열었어요: %s" % str(e)[:60], "#c0392b", 8000)
+            return
         if self.busy:
             return
         if not configured():

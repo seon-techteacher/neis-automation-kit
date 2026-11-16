@@ -1,0 +1,20 @@
+{
+  "name": "업무도우미",
+  "short_name": "업무도우미",
+  "description": "교사용 업무 도구함 · © 2026 Kang SeongHo",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fbfcfd",
+  "theme_color": "#1f3fae",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "첨부 용량 맞추기", "url": "tools/docs.html#size" },
+    { "name": "일람표·PDF 점검", "url": "tools/check.html" },
+    { "name": "자리뽑기", "url": "tools/seat.html" },
+    { "name": "명단 도구", "url": "tools/roster.html" }
+  ]
+}
