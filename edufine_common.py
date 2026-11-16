@@ -384,7 +384,9 @@ def login(page, cert_name, cert_pw):
     wait_overlay_gone(page, timeout=60)
     robust_click(page, btn.last, "교육행정 전자서명 인증서 로그인")
     wait_overlay_gone(page, timeout=60, quiet=True)
-    pwd = page.get_by_role("textbox", name="인증서 암호 입력필드")
+    # 지역(예: 충북)에 따라 암호칸이 진짜 password 칸이라 textbox 역할로 안 잡힌다 (neis_session.py 와 같은 보완)
+    pwd = page.get_by_role("textbox", name="인증서 암호 입력필드").or_(
+        page.locator("input[type='password']:visible")).first
     try:
         pwd.wait_for(timeout=90000)
     except Exception:

@@ -69,7 +69,8 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # 인증서 창의 글자를 « | » 로 이어 붙여 가져온다 (암호칸에서 위로 올라가며 목록이 든 상자를 찾는다)
 JS_CERT_DIALOG = """() => {
-    let el = document.querySelector('input[aria-label="인증서 암호 입력필드"], input[title="인증서 암호 입력필드"]');
+    let el = document.querySelector('input[aria-label="인증서 암호 입력필드"], input[title="인증서 암호 입력필드"]')
+          || [...document.querySelectorAll('input[type="password"]')].find(e => e.offsetParent);
     for (let i = 0; el && i < 15; i++, el = el.parentElement) {
         const t = el.innerText || '';
         if (t.includes('발급자') && t.includes('인증서 보기')) return t.replace(/\\s*\\n\\s*/g, ' | ');
@@ -321,7 +322,9 @@ async def auto_cert_login(page, name, pw, alerts):
             "   ③ 평소 크롬으로 나이스에 들어갔을 때 보안프로그램 설치 안내가 뜨는지 확인하세요")
     await btn.first.click()
 
-    pwd = page.get_by_role("textbox", name="인증서 암호 입력필드")
+    # 지역(예: 충북)에 따라 암호칸이 진짜 password 칸이라 textbox 역할로 안 잡힌다 (main.py 와 같은 보완)
+    pwd = page.get_by_role("textbox", name="인증서 암호 입력필드").or_(
+        page.locator("input[type='password']:visible")).first
     try:
         await pwd.wait_for(timeout=20_000)
     except Exception:

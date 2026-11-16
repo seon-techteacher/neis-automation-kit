@@ -292,7 +292,9 @@ async def auto_login(page: Page, wait_ms: int = 8_000):
             pass  # 자동 선택된 경우 무시
 
         # 비밀번호 입력 후 Enter (버튼 클릭 대신)
-        pwd = page.get_by_role("textbox", name="인증서 암호 입력필드")
+        # 지역(예: 충북)에 따라 암호칸이 진짜 password 칸이라 textbox 역할로 안 잡힌다 → 보이는 password 칸도 같이 본다
+        pwd = page.get_by_role("textbox", name="인증서 암호 입력필드").or_(
+            page.locator("input[type='password']:visible")).first
         await pwd.wait_for(timeout=8000)
         await pwd.fill(CERT_PASSWORD)
         await pwd.press("Enter")

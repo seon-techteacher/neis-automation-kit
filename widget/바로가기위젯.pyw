@@ -45,7 +45,10 @@ PORTS = {"neis": 9322, "edufine": 9324}
 BG, INK, LINE = "#fffaf2", "#3b2f25", "#d9ccb8"
 BTNS = [("나이스", "neis", "open", "#1b6fb5"), ("에듀파인", "edufine", "main", "#2f7d4f"),
         ("문서등록대장", "edufine", "open", "#8a5a2b"), ("공람", "edufine", "cnrs", "#6b4fb5"),
-        ("검수", "inspect", "check", "#d63a30"), ("복무", "bokmu", "form", "#c2417a")]
+        ("상벌점", "green", "open", "#b5651d"),
+        ("복무", "bokmu", "form", "#c2417a")]   # [검수] 단추는 선생님 요청으로 뺐다 (2026-11-16)
+GREEN = HERE / "상벌점사이트_엔진.py"              # 학교 상벌점 사이트 (아이디·비밀번호 로그인)
+GREEN_SETUP = HERE / "상벌점사이트_설정.py"
 INSPECT = HERE.parent / "edufine_inspect.py"      # 키트의 물품 검사검수 (조회만 / --go 등록)
 BOKMU = HERE.parent / "main_bokmu.py"             # 키트의 복무(근무상황) 상신
 BOKMU_TYPES = ["조퇴", "외출", "지각", "병조퇴", "병외출", "병지각"]
@@ -271,7 +274,8 @@ class Widget:
         sw = self.root.winfo_screenwidth()
         self.root.geometry("+%d+%d" % (st.get("x", sw - 470), st.get("y", 12)))
         self.prewarm = st.get("prewarm", False)   # 기본 끔 — 누르기 전에 창이 뜨면 «안 누른 문서등록대장이 켜진다»로 보인다 (2026-10-23)
-        self.locks = {"neis": threading.Lock(), "edufine": threading.Lock(), "inspect": threading.Lock()}
+        self.locks = {"neis": threading.Lock(), "edufine": threading.Lock(), "inspect": threading.Lock(),
+                      "green": threading.Lock()}
         self.busy = None
         self.note = ("", INK)
         self.dragging = False
@@ -305,6 +309,7 @@ class Widget:
 
         self.m = tk.Menu(self.root, tearoff=0, font=("Malgun Gothic", 9))
         self.m.add_command(label="인증서 설정 (처음 한 번)", command=self.open_setup)
+        self.m.add_command(label="상벌점 설정 (아이디·비밀번호)", command=self.open_green_setup)
         self.prewarm_var = tk.BooleanVar(value=self.prewarm)
         self.m.add_checkbutton(label="미리 열어두기 (빠른 클릭)", variable=self.prewarm_var, command=self.toggle_prewarm)
         self.m.add_command(label="지금 미리 열어두기", command=lambda: self.warm_all(True))
@@ -396,7 +401,8 @@ class Widget:
         t0 = time.time()
         seen, last = [], ""
         with self.locks[site]:
-            p = subprocess.Popen([str(PY), "-X", "utf8", str(ENGINE), site, cmd, *extra], stdout=subprocess.PIPE,
+            script = GREEN if site == "green" else ENGINE
+            p = subprocess.Popen([str(PY), "-X", "utf8", str(script), site, cmd, *extra], stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
                                  env=ENV, cwd=str(HERE), creationflags=NO_WINDOW)
             try:
@@ -680,6 +686,12 @@ class Widget:
         # 마우스로 고르는 설정 창 (클로드 없이 쓰는 선생님도 같은 창). 검은 창판(바로가기_설정.py)은 클로드 지시서용으로 남겨 둔다
         subprocess.Popen([str(PY.with_name("pythonw.exe")), str(HERE / "바로가기_설정창.pyw")], cwd=str(HERE), env=ENV)
         self.say("설정 창에서 마쳐 주세요", INK, 8000)
+
+    def open_green_setup(self):
+        # 비밀번호를 안 보이게 받는 검은 창 — 새 콘솔로 띄운다
+        subprocess.Popen([str(PY), "-X", "utf8", str(GREEN_SETUP)], cwd=str(HERE), env=ENV,
+                         creationflags=0x00000010)      # CREATE_NEW_CONSOLE
+        self.say("검은 창에서 마쳐 주세요", INK, 8000)
 
     def close_chrome(self):
         def fn():
