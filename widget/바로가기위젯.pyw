@@ -970,6 +970,7 @@ class Widget:
         threading.Thread(target=fn, daemon=True).start()
 
     def mainloop(self):
+        link_hangul_helper()
         self.root.after(200, self.keep_visible)      # 저장해 둔 자리가 지금 화면 밖이면 바로 안으로 (크기가 잡힌 뒤)
         self.tick()
         self.root.after(WARM_EVERY, self.loop_warm)
@@ -979,6 +980,34 @@ class Widget:
         elif self.prewarm:
             self.root.after(1500, lambda: self.warm_all(True))
         self.root.mainloop()
+
+
+def link_hangul_helper():
+    """업무도우미의 [시험지 편집 도우미] 단추는 «udesk-hangul:» 주소로 한글 옆 버튼 창을 연다.
+    그 주소는 PC 마다 한 번 «편집 도우미 버튼 연결.cmd»로 등록해야 하는데, 안 하면 단추를 눌러도 아무 일도 없다
+    (2026-11-17 실측 — 등록이 없어서 «잘 안 된다»). 위젯이 켜질 때 그 .cmd 와 똑같은 값을 현재 사용자(HKCU)에만 넣는다.
+    이미 이 키트 폴더를 가리키고 있으면 건드리지 않는다. 폴더를 옮겼으면 새 자리로 고쳐 넣는다."""
+    script = HERE.parent / "업무도우미" / "hangul" / "exam-helper.ps1"
+    if os.name != "nt" or not script.exists():
+        return
+    want = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File "%s"' % script
+    try:
+        import winreg
+        base = r"Software\Classes\udesk-hangul"
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, base + r"\shell\open\command") as k:
+                if winreg.QueryValueEx(k, "")[0] == want:
+                    return
+        except OSError:
+            pass
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base) as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, "URL:udesk-hangul")
+            winreg.SetValueEx(k, "URL Protocol", 0, winreg.REG_SZ, "")
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base + r"\shell\open\command") as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, want)
+        log_line("업무도우미 시험지 편집 도우미 연결 (udesk-hangul → %s)" % script)
+    except Exception as e:
+        log_line("업무도우미 시험지 편집 도우미 연결 실패: %s" % str(e)[:120])
 
 
 def breakaway():
