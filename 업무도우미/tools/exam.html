@@ -67,6 +67,16 @@ details > summary { cursor: pointer; font-weight: 700; }
       <div class="note info" id="ansNote" hidden></div>
       <div class="dist" id="dist" hidden></div>
 
+      <h2>문항정보표</h2>
+      <label class="field"><span>문항 순서대로 난이도 (예: 하 중 중 상 …)</span><input id="levels" placeholder="상·중·하를 순서대로 넣으면 난이도 비율을 확인하고 문항정보표 칸을 채워요" autocomplete="off"></label>
+      <div class="note info" id="lvNote" hidden></div>
+      <div class="row">
+        <button class="btn primary" id="copyForm" title="학교 양식의 H(상)·I(중)·J(하)·K(배점)·L(정답) 칸 순서예요">학교 양식 H~L칸 붙여넣기용 복사</button>
+        <span class="muted small">학교 문항정보표에서 1번 문항의 '상' 칸(H7)을 누르고 붙여 넣으면 난이도·배점·정답이 한 번에 들어가요.</span>
+      </div>
+      <div class="drop" id="formDrop"><b>다 쓴 문항정보표(xlsx)를 넣으면 원안지와 대조해요</b>배점·문항 수·정답 빈칸·난이도 표시·남은 빈 행을 봐요. 파일은 고치지 않아요.<input type="file" id="formFile" accept=".xlsx,.xls" hidden></div>
+      <div class="issues" id="formOut" hidden></div>
+
       <details>
         <summary>무엇을 점검하나요</summary>
         <ul class="small muted">
@@ -77,10 +87,12 @@ details > summary { cursor: pointer; font-weight: 700; }
           <li>선택지: ①~⑤가 빠지거나 겹치지 않는지, 같은 선택지가 두 번 있는지</li>
           <li>부정어(않은·아닌·없는·틀린·다른 것은)에 밑줄이 있는지</li>
           <li>글꼴: 문제·선택지 스타일과 글꼴·크기가 다른 글자, 자간을 많이 줄인 곳(-15% 이하), 겹친 띄어쓰기</li>
+          <li>출제 요령(전국연합 선택형 평가문항): 기호 짝(선택지의 ㉣이 &lt;보기&gt;에 있는지), 발문 끝맺음('~것은?'), 발문 4줄 이내, 묶음 지시문 '~하시오.', 선택지 순서(짧은 것→긴 것, 기호 묶음은 개수→가나다), 선택지마다 반복되는 말, 단서가 되는 말(절대·항상·모두·전혀·오직·반드시), &lt;보기&gt; 안 '·' 대신 ○, 머리말·꼬리말 고사명, 정답이 ①②③④처럼 차례로 이어지는지</li>
+          <li>복수정답, 매력적인 오답, 조사(은/는) 정확성, 앞 문제가 다음 문제의 힌트가 되는지는 내용을 읽어야 해서 직접 확인하세요.</li>
           <li>총 쪽수는 한글에서 쪽을 나눈 결과라 여기서는 확인할 수 없어요. 한글에서 직접 확인하세요.</li>
         </ul>
       </details>
-      <div class="note info row"><span class="grow"><b>한글에서 바로 고치려면</b> 한글 옆에 버튼 창을 띄워 자간·줄 간격, 발문·선택지 서식, 배점, &lt;보기&gt; 상자, 선택지 짧은 순, 기호 넣기를 눌러서 할 수 있어요. 처음에는 '편집 도우미 받기'로 받은 zip을 풀고, 안의 <code>편집 도우미 버튼 연결.cmd</code>를 한 번 실행해 두세요.</span><a class="btn" href="../hangul-helper.zip" download>편집 도우미 받기</a><a class="btn primary" href="udesk-hangul:open">편집 도우미 열기</a></div>
+      <div class="note info row"><span class="grow"><b>한글에서 바로 고치려면</b> 한글 옆에 버튼 창을 띄워 자간·줄 간격, 발문·선택지 서식, 배점, &lt;보기&gt; 상자, 선택지 짧은 순, 기호 넣기를 눌러서 할 수 있어요. 처음에는 '설치 파일 받기'로 받은 파일을 두 번 누르면 설치돼요(관리자 권한 필요 없음). 'PC 보호' 창이 뜨면 '추가 정보 → 실행'을 누르세요. 압축 파일로 받아 직접 풀어 쓰셔도 돼요.</span><a class="btn" href="../exam-helper-setup.cmd" download="시험지 편집 도우미 설치.cmd">설치 파일 받기</a><a class="btn" href="../hangul-helper.zip" download>압축 파일로 받기</a><a class="btn primary" href="udesk-hangul:open">편집 도우미 열기</a></div>
     </div>
   </section>
 </div>
@@ -167,6 +179,35 @@ const styleId = (H, name) => Object.keys(H.styles).find(k => H.styles[k].name ==
 const fontLabel = c => c ? `${c.font}${c.latin && c.latin !== c.font ? '/' + c.latin : ''} ${c.size}pt` : '?';
 const norm = s => s.replace(/\s+/g, '');
 const WEEK = '일월화수목금토';
+// ── 출제 요령(전국연합 선택형 평가문항 출제 요령) 점검에 쓰는 것들 (2026-11-18 추가)
+// 화면에서 차지하는 너비: 한글·한자 1, 영문·숫자 0.55, 빈칸 0.3
+const width = s => [...s].reduce((w, ch) => w + (/\s/.test(ch) ? 0.3 : ch.charCodeAt(0) >= 0x1100 ? 1 : 0.55), 0);
+// 지문·<보기>를 가리키는 기호: ㉠ Ⓐ ⓐ (가) (A) (a) ㄱ
+const SYM = /[㉠-㉭]|[Ⓐ-Ⓩ]|[ⓐ-ⓩ]|\(\s*(?:[가-하]|[A-Ea-e])\s*\)|(?<![가-힣ㄱ-ㅎ])[ㄱ-ㅎ](?=\s*[,.)]|\s|$)/g;
+const symKey = s => s.replace(/\s+/g, '');
+function symbolsIn(text, expandRanges) {
+  const out = new Set((text.match(SYM) || []).map(symKey));
+  // 'Ⓐ~Ⓔ'처럼 범위로 쓴 것은 사이 기호도 모두 쓴 것으로 본다.
+  if (expandRanges) for (const m of text.matchAll(/([㉠-㉭Ⓐ-Ⓩⓐ-ⓩ])\s*[~∼～\-–]\s*([㉠-㉭Ⓐ-Ⓩⓐ-ⓩ])/g)) {
+    const a = m[1].codePointAt(0), b = m[2].codePointAt(0);
+    if (b > a && b - a < 15) for (let c = a; c <= b; c++) out.add(String.fromCodePoint(c));
+  }
+  return out;
+}
+// 선택지가 기호 묶음뿐인지('ㄱ, ㄴ', 'Ⓐ, Ⓒ, Ⓓ')
+const COMBO = /^(?:[㉠-㉭Ⓐ-Ⓩⓐ-ⓩㄱ-ㅎ]|\(\s*[가-하A-Ea-e]\s*\))(?:\s*,\s*(?:[㉠-㉭Ⓐ-Ⓩⓐ-ⓩㄱ-ㅎ]|\(\s*[가-하A-Ea-e]\s*\)))*\.?$/;
+const CLUE = /절대|항상|모두|전혀|오직|반드시|결코|언제나/g;
+const STEM_END_BAD = /(?:면|인가|입니까|일까|는가|ㄴ가)\s*\?\s*$/;
+// 출제 요령 순서: 기호 묶음은 개수 → 사전식, 그 밖은 짧은 것 → 긴 것(같으면 사전식)
+function expectedOrder(choices) {
+  const cores = choices.map(c => c.text.replace(/\s*➜[\s\S]*$/, '').trim());
+  if (cores.every(t => COMBO.test(t))) {
+    const key = t => [t.split(',').length, t.replace(/\s/g, '')];
+    return cores.map((t, i) => ({ t, i, k: key(t) })).sort((a, b) => a.k[0] - b.k[0] || a.k[1].localeCompare(b.k[1], 'ko')).map(x => x.i);
+  }
+  if (cores.every(t => /^[A-E](?![A-Za-z])/.test(t))) return null; // A·B·C로 시작하면 그 법칙을 따르므로 길이 순서를 보지 않는다
+  return cores.map((t, i) => ({ t, i, w: width(t) })).sort((a, b) => (a.w - b.w > 0.6 ? 1 : b.w - a.w > 0.6 ? -1 : a.t.localeCompare(b.t, 'ko'))).map(x => x.i);
+}
 
 function analyse({ H, paras }) {
   const docIssues = [], qs = [];
@@ -279,6 +320,43 @@ function analyse({ H, paras }) {
     if (/\s\?/.test(stemCore)) add(1, "물음표 앞에 빈칸이 있어요.");
     for (const b of choiceParas) if (/^\s+[①-⑩]/.test(b.text) && b.depth === 0) { add(1, '선택지 번호 앞에 빈칸이 있어요.'); break; }
 
+    // ── 출제 요령 점검 (2026-11-18 추가)
+    // 1) 기호 짝: 발문·선택지에 쓴 ㉠·Ⓐ·(가)·ㄱ 등이 지문·<보기>에 있는지
+    const grp = groups.find(g => g.a <= no && no <= g.b && qIdx[g.a - 1] !== undefined);
+    const passage = grp ? paras.slice(grp.i + 1, qIdx[grp.a - 1]) : [];
+    const material = [...passage, ...body.filter(b => !choiceParas.includes(b))].map(b => b.text).join('\n');
+    const used = new Set([...symbolsIn(e.text.replace(SCORE, ''), true), ...symbolsIn(chText, false)]);
+    const have = symbolsIn(material, true);
+    const missing = [...used].filter(s => !have.has(s));
+    if (missing.length) add(material.trim() ? 3 : 2, material.trim()
+      ? `기호 ${missing.join(' ')}이(가) 지문·<보기>에 없어요. 발문·선택지와 자료의 기호를 맞추세요.`
+      : `기호 ${missing.join(' ')}이(가) 가리키는 지문·<보기>를 찾지 못했어요. 확인하세요.`);
+    // 2) 발문 끝맺음: '~것은?'처럼 불완전한 형식으로
+    if (/[가-힣]/.test(stemCore.slice(-8)) && STEM_END_BAD.test(stemCore)) add(2, "발문은 '~것은?'처럼 끝내요('~고르면?', '~인가?' 쓰지 않음).");
+    // 7) 발문 길이: 2단 한 줄에 한글 약 23자 → 4줄 넘으면
+    const lines = Math.ceil(width(stemCore) / 23);
+    if (lines > 4) add(1, `발문이 약 ${lines}줄이에요. 4줄 안으로 간단히 쓰는 것이 출제 요령이에요.`);
+    if (choices.length >= 3) {
+      // 4) 선택지 순서
+      const exp = expectedOrder(choices);
+      if (exp && exp.some((v, i) => v !== i)) add(1, `선택지 순서: 출제 요령대로면 ${exp.map(i => choices[i].mark).join('')} 차례(짧은 것→긴 것, 기호 묶음은 개수→가나다)예요. 편집 도우미 '짧은 것부터 ①'로 바꿀 수 있어요.`);
+      // 5) 선택지마다 반복되는 말
+      const cores = choices.map(c => c.text);
+      if (!cores.every(t => COMBO.test(t.trim()))) {
+        let pre = cores[0], suf = cores[0];
+        for (const t of cores) { while (pre && !t.startsWith(pre)) pre = pre.slice(0, -1); while (suf && !t.endsWith(suf)) suf = suf.slice(1); }
+        // 영어 낱말 하나('There', 'Because')는 빼고, 두 낱말 넘거나 한글 4자 넘게 반복될 때만 본다.
+        const meaningful = x => (/\S\s+\S/.test(x) || (x.match(/[가-힣]/g) || []).length >= 4) && norm(x).replace(/[.?!]/g, '').length >= 4;
+        const rep = [pre.replace(/\S*$/, '').trim(), suf.replace(/^\S*\s/, '').trim()].filter(x => meaningful(x) && cores.every(t => norm(t).length > norm(x).length + 2));
+        if (rep.length) add(1, `선택지마다 '${rep[0].length > 20 ? rep[0].slice(0, 20) + '…' : rep[0]}'가 반복돼요. 발문으로 옮길 수 있는지 보세요.`);
+      }
+      // 6) 단서가 되는 말
+      const clue = [...new Set(chText.match(CLUE) || [])];
+      if (clue.length) add(2, `선택지에 단서가 될 수 있는 말(${clue.join('·')})이 있어요.`);
+    }
+    // 8) <보기> 안 항목 앞 '·' → 선택 대상이 아니면 ○
+    if (body.some(b => b.depth > 0 && /^\s*[·•ㆍ]/.test(b.text))) add(1, "<보기>·자료 안 항목 앞에 '·'를 썼어요. 선택하는 항목이 아니면 '○', 고르는 항목이면 'ㄱ. ㄴ. ㄷ.'(출제 요령).");
+
     qs.push({ no, stem: e.text.replace(SCORE, '').trim(), point, choices, issues, refsAbove: /윗\s*글|위\s*글|위\s*대화|윗\s*대화|위의\s*글/.test(e.text), qi });
   });
 
@@ -292,6 +370,13 @@ function analyse({ H, paras }) {
   }
   for (const q of qs) if (q.refsAbove && !groups.some(g => g.a <= q.no && q.no <= g.b))
     q.issues.push({ sev: 2, msg: "'윗글·위 대화'를 묻는데 [n~m] 묶음 안에 없어요. 묶음 번호를 확인하세요." });
+  // 3) 묶음 지시문은 '~하시오.'로 통일 (출제 요령)
+  for (const g of groups) if (!/하시오\.?\s*$/.test(g.text)) addDoc(2, `'${g.text.slice(0, 30)}' 묶음 지시문은 '…물음에 답하시오.'처럼 '~하시오.'로 끝내요.`);
+  // 9) 머리말·꼬리말 고사명·학기 짝
+  for (const [re, what] of [[/(\d)\s*회\s*고사/g, '고사명'], [/(\d)\s*학기/g, '학기']]) {
+    const vals = [...new Set([...headText.matchAll(re)].map(m => m[1]))];
+    if (vals.length > 1) addDoc(3, `머리말·꼬리말의 ${what}이(가) 서로 달라요(${vals.map(v => v + (what === '학기' ? '학기' : '회고사')).join(', ')}).`);
+  }
 
   // ── 합계
   const total = Math.round(qs.reduce((s, q) => s + (q.point || 0), 0) * 100) / 100;
@@ -321,7 +406,7 @@ function render() {
     return `<tr class="${list.length ? '' : 'clean'}"><td class="no">${q.no}</td><td><div class="stem">${esc(q.stem)}</div><div class="chs">${esc(q.choices.map(c => c.mark + ' ' + c.text).join('\n'))}</div></td>
       <td class="pt num">${q.point ?? '-'}</td><td><div class="issues">${list.length ? list.map(issueHTML).join('') : '<span class="pill ok">이상 없음</span>'}</div></td></tr>`;
   }).join('');
-  renderAnswers();
+  renderAnswers(); renderLevels();
 }
 function parseAnswers() {
   const v = $('answers').value.replace(/[①-⑤]/g, c => ' ' + (CIRCLED.indexOf(c) + 1) + ' ');
@@ -338,6 +423,14 @@ function renderAnswers() {
     if (i < a.length && a[i] === a[i - 1]) run++;
     else { if (run >= 3) msgs.push(`${i - run + 1}~${i}번 정답이 모두 ${CIRCLED[a[i - 1] - 1]}이에요.`); run = 1; }
   }
+  // 정답 위치가 일정한 패턴(①②③④ 또는 ⑤④③②)으로 4문항 넘게 이어지는지 (출제 요령)
+  for (const step of [1, -1]) {
+    let len = 1;
+    for (let i = 1; i <= a.length; i++) {
+      if (i < a.length && a[i] - a[i - 1] === step) len++;
+      else { if (len >= 4) msgs.push(`${i - len + 1}~${i}번 정답이 ${a.slice(i - len, i).map(x => CIRCLED[x - 1]).join('→')} 차례로 이어져요.`); len = 1; }
+    }
+  }
   note.hidden = false;
   note.innerHTML = msgs.length ? `<b>확인하세요.</b> ${esc(msgs.join(' '))}` : `<b>고르게 나뉘었어요.</b> ${cnt.map((c, i) => CIRCLED[i] + ' ' + c + '개').join(', ')}`;
   const top = Math.max(...cnt, 1);
@@ -345,8 +438,66 @@ function renderAnswers() {
   dist.innerHTML = cnt.map((c, i) => `<div class="${c === 0 || (a.length >= 10 && c > avg * 1.6) ? 'off' : ''}"><b class="num">${c}</b><i style="height:${Math.round(c / top * 80)}%"></i><span>${CIRCLED[i]}</span></div>`).join('');
 }
 function infoRows() {
-  const a = parseAnswers();
-  return [['문항', '배점', '정답', '발문'], ...last.qs.map((q, i) => [q.no, q.point ?? '', a[i] ?? '', q.stem])];
+  const a = parseAnswers(), d = parseLevels();
+  return [['문항', '난이도', '배점', '정답', '발문'], ...last.qs.map((q, i) => [q.no, d[i] ?? '', q.point ?? '', a[i] ?? '', q.stem])];
+}
+// ── 난이도와 학교 문항정보표 (2026-11-18 추가)
+const parseLevels = () => [...$('levels').value.replace(/[^상중하]/g, '')];
+function renderLevels() {
+  const d = parseLevels(), note = $('lvNote'); if (!last) return;
+  if (!d.length) { note.hidden = true; return; }
+  const c = { 상: 0, 중: 0, 하: 0 }; d.forEach(x => c[x]++);
+  const pts = { 상: 0, 중: 0, 하: 0 }; last.qs.forEach((q, i) => { if (d[i]) pts[d[i]] += q.point || 0; });
+  const msgs = [];
+  if (d.length !== last.qs.length) msgs.push(`난이도가 ${d.length}개예요. 문항은 ${last.qs.length}개예요.`);
+  if (!(c.중 >= c.상 && c.중 >= c.하)) msgs.push('문항정보표 안내: 난이도는 중이 가장 많게 해요.');
+  if (Math.abs(c.상 - c.하) > Math.max(2, Math.round(d.length * 0.1))) msgs.push('상과 하 문항 수가 많이 달라요. 비슷한 비율로 맞춰요.');
+  note.hidden = false;
+  note.innerHTML = `${msgs.length ? '<b>확인하세요.</b> ' + esc(msgs.join(' ')) + '<br>' : '<b>좋아요.</b> '}상 ${c.상}문항(${Math.round(pts.상 * 10) / 10}점) · 중 ${c.중}문항(${Math.round(pts.중 * 10) / 10}점) · 하 ${c.하}문항(${Math.round(pts.하 * 10) / 10}점)`;
+}
+// 학교 양식 H(상)·I(중)·J(하)·K(배점)·L(정답) 칸에 그대로 붙여 넣는 글
+function formRows() {
+  const a = parseAnswers(), d = parseLevels();
+  return last.qs.map((q, i) => [d[i] === '상' ? 0 : '', d[i] === '중' ? 0 : '', d[i] === '하' ? 0 : '', q.point ?? '', a[i] ?? ''].join('\t')).join('\n');
+}
+// 다 쓴 문항정보표(xlsx)를 원안지와 한 문항씩 대조
+async function compareForm(file) {
+  const out = $('formOut'); out.hidden = false;
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames.find(n => /문항정보표/.test(n)) || wb.SheetNames[0]];
+    const g = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+    const hr = g.findIndex(r => r.some(v => String(v).replace(/\s/g, '') === '번호'));
+    if (hr < 0) throw new Error("'번호' 제목 칸을 찾지 못했어요.");
+    const H = g[hr].map(v => String(v).replace(/\s/g, '')), sub = (g[hr + 1] || []).map(v => String(v).replace(/\s/g, ''));
+    const col = name => H.findIndex(v => v.startsWith(name));
+    const cNo = col('번호'), cPt = col('배점'), cAns = col('정답'), cPre = col('선행출제');
+    const cLv = { 상: sub.indexOf('상'), 중: sub.indexOf('중'), 하: sub.indexOf('하') };
+    const rows = [];
+    for (let r = hr + 2; r < g.length; r++) { const no = g[r][cNo]; if (no === '' || isNaN(+no)) break; rows.push(g[r]); }
+    const msgs = [], filled = rows.filter(r => r[cPt] !== '' || r[cAns] !== '');
+    const empty = rows.length - filled.length;
+    if (empty) msgs.push([2, `번호만 있고 배점·정답이 빈 행이 ${empty}개 있어요. 문항 수를 넘는 빈 행은 지워요(양식 안내).`]);
+    if (filled.length !== last.qs.length) msgs.push([3, `문항정보표는 ${filled.length}문항, 원안지는 ${last.qs.length}문항이에요.`]);
+    const diffs = [];
+    filled.forEach((r, i) => {
+      const q = last.qs[i]; if (!q) return;
+      const p = +r[cPt];
+      if (q.point != null && Math.abs(p - q.point) > 1e-9) diffs.push(`${r[cNo]}번 원안지 ${q.point}점 · 정보표 ${r[cPt] === '' ? '빈칸' : p + '점'}`);
+      const lv = ['상', '중', '하'].filter(k => cLv[k] >= 0 && r[cLv[k]] !== '');
+      if (lv.length !== 1) msgs.push([2, `${r[cNo]}번 난이도를 ${lv.length ? lv.join('·') + ' 두 칸 이상' : '표시하지 않았어요'}${lv.length ? '에 표시했어요' : ''}.`]);
+      if (r[cAns] === '') msgs.push([3, `${r[cNo]}번 정답이 비어 있어요.`]);
+      else if (String(r[cAns]).replace(/\s/g, '').length > 1) msgs.push([2, `${r[cNo]}번 정답이 '${r[cAns]}'예요. 복수정답이면 일부러 그런 것인지 확인해요.`]);
+      if (cPre >= 0 && !/^[×xX]?$/.test(String(r[cPre]).trim())) msgs.push([2, `${r[cNo]}번 선행출제 여부가 '${r[cPre]}'예요.`]);
+    });
+    if (diffs.length) msgs.unshift([3, `배점이 달라요: ${diffs.join(', ')}`]);
+    const sum = Math.round(filled.reduce((s, r) => s + (+r[cPt] || 0), 0) * 100) / 100;
+    if (sum !== 100) msgs.push([3, `문항정보표 배점 합계가 ${sum}점이에요.`]);
+    // 정답·난이도가 아직 비어 있으면 문항정보표 값으로 채워 분포를 바로 본다.
+    if (!$('answers').value.trim() && filled.every(r => r[cAns] !== '')) { $('answers').value = filled.map(r => r[cAns]).join(' '); renderAnswers(); }
+    if (!$('levels').value.trim()) { $('levels').value = filled.map(r => ['상', '중', '하'].find(k => cLv[k] >= 0 && r[cLv[k]] !== '') || '?').join(' '); renderLevels(); }
+    out.innerHTML = `<b>${esc(file.name)}</b> 대조 결과` + (msgs.length ? msgs.sort((x, y) => y[0] - x[0]).map(([s, m]) => issueHTML({ sev: s, msg: m })).join('') : '<div class="iss"><span class="pill ok">원안지와 배점·문항 수가 같아요</span></div>');
+  } catch (err) { out.innerHTML = `<div class="iss"><span class="tag m3">읽지 못함</span><span>${esc(err.message || err)}</span></div>`; }
 }
 
 async function openFile(file) {
@@ -363,6 +514,12 @@ dropZone($('drop'), $('file'), f => openFile(f[0]));
 $('filters').addEventListener('change', render);
 $('onlyBad').addEventListener('change', render);
 $('answers').addEventListener('input', () => last && renderAnswers());
+$('levels').addEventListener('input', renderLevels);
+$('copyForm').addEventListener('click', () => {
+  if (!parseAnswers().length || !parseLevels().length) toast('정답과 난이도를 넣으면 그 칸도 같이 채워져요. 지금은 빈칸으로 복사해요.');
+  copyText(formRows(), '복사했어요. 학교 문항정보표의 1번 문항 H칸(상)을 누르고 붙여 넣으세요.');
+});
+dropZone($('formDrop'), $('formFile'), f => compareForm(f[0]));
 $('copyInfo').addEventListener('click', () => copyText(infoRows().map(r => r.join('\t')).join('\n'), '문항정보표를 복사했어요. 엑셀에 붙여 넣으세요.'));
 $('saveInfo').addEventListener('click', () => {
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(infoRows()), '문항정보표');

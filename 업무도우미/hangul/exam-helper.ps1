@@ -125,13 +125,51 @@ function Split-Choices([string]$t) {
   }
   return @{ prefix = $parts[0]; items = $items }
 }
+# 출제 요령(전국연합 선택형 평가문항 출제 요령)의 선택지 순서 (2026-11-18)
+#  - 'ㄱ, ㄴ'·'Ⓐ, Ⓒ' 같은 기호 묶음: 개수가 적은 것부터, 같으면 가나다(사전식)
+#  - 'A는…', 'B와 C는…'처럼 A·B·C로 시작: 기호 하나짜리를 A→B→C 차례로 먼저, 그다음 둘 이상 비교하는 것
+#  - 그 밖: 짧은 것 → 긴 것, 길이가 거의 같으면 가나다
+#  '➜ 고친 문장' 줄은 길이에 넣지 않는다.
+$KoCulture = [Globalization.CultureInfo]'ko-KR'
+$ComboRe = '^(?:[㉠-㉭Ⓐ-Ⓩⓐ-ⓩㄱ-ㅎ]|\(\s*[가-하A-Ea-e]\s*\))(?:\s*,\s*(?:[㉠-㉭Ⓐ-Ⓩⓐ-ⓩㄱ-ㅎ]|\(\s*[가-하A-Ea-e]\s*\)))*\.?$'
+function Core-Of([string]$s) { return ($s -replace '\s*➜[\s\S]*$', '').Trim() }
+function Order-Choices($items) {
+  $cores = @($items | ForEach-Object { Core-Of $_.core })
+  $list = New-Object System.Collections.ArrayList
+  foreach ($it in $items) { [void]$list.Add($it) }
+  if (@($cores | Where-Object { $_ -notmatch $ComboRe }).Count -eq 0) {
+    $cmp = { param($a, $b) $x = Core-Of $a.core; $y = Core-Of $b.core
+      $d = ($x -split ',').Count - ($y -split ',').Count; if ($d) { return $d }
+      return [string]::Compare(($x -replace '\s', ''), ($y -replace '\s', ''), $KoCulture, [Globalization.CompareOptions]::None) }
+  } elseif (@($cores | Where-Object { $_ -cnotmatch '^[A-E](?![A-Za-z])' }).Count -eq 0) {
+    $cmp = { param($a, $b)
+      $la = ([regex]::Matches((Core-Of $a.core), '(?<![A-Za-z])[A-E](?![A-Za-z])') | ForEach-Object { $_.Value }) -join ''
+      $lb = ([regex]::Matches((Core-Of $b.core), '(?<![A-Za-z])[A-E](?![A-Za-z])') | ForEach-Object { $_.Value }) -join ''
+      $d = $la.Length - $lb.Length; if ($d) { return $d }
+      $s = [string]::CompareOrdinal($la, $lb); if ($s) { return $s }
+      return $a.idx - $b.idx }
+  } else {
+    $cmp = { param($a, $b) $x = Core-Of $a.core; $y = Core-Of $b.core
+      $d = (Width $x) - (Width $y); if ($d -gt 0.6) { return 1 }; if ($d -lt -0.6) { return -1 }
+      $s = [string]::Compare($x, $y, $KoCulture, [Globalization.CompareOptions]::None); if ($s) { return $s }
+      return $a.idx - $b.idx }
+  }
+  # 차례가 바뀌지 않는 삽입 정렬
+  $out = New-Object System.Collections.ArrayList
+  foreach ($it in $list) {
+    $pos = $out.Count
+    while ($pos -gt 0 -and (& $cmp $out[$pos - 1] $it) -gt 0) { $pos-- }
+    $out.Insert($pos, $it)
+  }
+  return , $out.ToArray()
+}
 function Sort-Choices {
   $h = Get-Hwp; if (-not $h) { return }
   $t = Selected $h
   $c = Split-Choices $t
   if ($c.items.Count -lt 2) { Set-Status '선택지 줄(①~⑤)을 먼저 드래그해서 고르세요.' $true; return }
   if ($c.prefix.Trim()) { Set-Status '발문 줄은 빼고 ① 줄부터 ⑤ 줄까지만 고르세요.' $true; return }
-  $sorted = $c.items | Sort-Object @{ e = { Width $_.core } }, @{ e = { $_.idx } }
+  $sorted = Order-Choices $c.items
   $out = $c.prefix; $map = @()
   for ($i = 0; $i -lt $c.items.Count; $i++) {
     $slot = $c.items[$i]; $it = $sorted[$i]
@@ -155,98 +193,137 @@ function Renumber-Choices {
 }
 function Insert-Symbol([string]$s) { $h = Get-Hwp; if (-not $h) { return }; Ins $h $s; Set-Status "'$s'를 넣었어요." }
 
-# ── 창 ────────────────────────────────────────────────────
-$font = New-Object Drawing.Font('맑은 고딕', 9)
-$bold = New-Object Drawing.Font('맑은 고딕', 9, [Drawing.FontStyle]::Bold)
-$accent = [Drawing.Color]::FromArgb(122, 58, 143)
+
+# ── 창 (A안: 정돈형) ─────────────────────────────────────────
+$font  = New-Object Drawing.Font('맑은 고딕', 9)
+$bold  = New-Object Drawing.Font('맑은 고딕', 9, [Drawing.FontStyle]::Bold)
+$small = New-Object Drawing.Font('맑은 고딕', 7.5)
+$C = @{
+  accent = [Drawing.Color]::FromArgb(122, 58, 143); soft = [Drawing.Color]::FromArgb(244, 238, 247); softLine = [Drawing.Color]::FromArgb(214, 194, 224)
+  bg = [Drawing.Color]::FromArgb(251, 252, 253); line = [Drawing.Color]::FromArgb(214, 220, 227); ink = [Drawing.Color]::FromArgb(20, 29, 39)
+  muted = [Drawing.Color]::FromArgb(110, 118, 128); sunk = [Drawing.Color]::FromArgb(238, 241, 245)
+  bad = [Drawing.Color]::FromArgb(179, 53, 43); badSoft = [Drawing.Color]::FromArgb(251, 227, 224)
+  warn = [Drawing.Color]::FromArgb(138, 80, 6); warnSoft = [Drawing.Color]::FromArgb(255, 236, 196)
+}
 $f = New-Object NoActivateForm
 $f.Text = '시험지 편집 도우미'; $f.TopMost = $true; $f.Font = $font
-$f.FormBorderStyle = 'SizableToolWindow'; $f.BackColor = [Drawing.Color]::FromArgb(251, 252, 253)
+$f.FormBorderStyle = 'SizableToolWindow'; $f.BackColor = $C.bg
 $wa = [Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-$f.StartPosition = 'Manual'; $f.Width = 324; $f.Height = [Math]::Min(900, $wa.Height); $f.Left = $wa.Right - $f.Width; $f.Top = $wa.Top
+$f.StartPosition = 'Manual'; $f.Width = 324; $f.Height = [Math]::Min(860, $wa.Height); $f.Left = $wa.Right - $f.Width; $f.Top = $wa.Top
 
-$status = New-Object Windows.Forms.Label
-$status.Dock = 'Bottom'; $status.Height = 64; $status.Padding = '8,6,8,6'; $status.BackColor = [Drawing.Color]::FromArgb(238, 241, 245)
+# ── 아래 알림 줄: 결과 안내 + 늘 보이는 되돌리기 ──
+$bottom = New-Object Windows.Forms.Panel; $bottom.Dock = 'Bottom'; $bottom.Height = 92; $bottom.BackColor = $C.sunk; $bottom.Padding = '8,8,8,8'
+$status = New-Object Windows.Forms.Label; $status.Dock = 'Fill'; $status.Font = New-Object Drawing.Font('맑은 고딕', 9.5); $status.Padding = '8,4,6,4'
 $status.Text = '한글에서 글자나 문단을 고르고 버튼을 누르세요.'
+$undo = New-Object Windows.Forms.Button; $undo.Dock = 'Right'; $undo.Width = 70; $undo.Text = "되돌리기`nCtrl+Z"; $undo.FlatStyle = 'Flat'
+$undo.FlatAppearance.BorderColor = $C.line; $undo.BackColor = [Drawing.Color]::White
+$undo.Add_Click({ Do-Action 'Undo' '한 단계 되돌렸어요.' })
+$gap = New-Object Windows.Forms.Panel; $gap.Dock = 'Right'; $gap.Width = 8; $gap.BackColor = $C.sunk
+$bottom.Controls.Add($status); $bottom.Controls.Add($gap); $bottom.Controls.Add($undo)
+# 보통 안내는 회색 바탕, 문제는 빨강, 정답 번호가 바뀌는 안내는 노랑으로 크게
 function Set-Status([string]$msg, [bool]$bad = $false) {
   $status.Text = $msg
-  $status.ForeColor = $(if ($bad) { [Drawing.Color]::FromArgb(179, 53, 43) } else { [Drawing.Color]::FromArgb(20, 29, 39) })
+  if ($bad) { $status.BackColor = $C.badSoft; $status.ForeColor = $C.bad; $status.Font = $bold }
+  elseif ($msg -match '[①-⑩]→[①-⑩]') { $status.BackColor = $C.warnSoft; $status.ForeColor = $C.warn; $status.Font = New-Object Drawing.Font('맑은 고딕', 9.5, [Drawing.FontStyle]::Bold) }
+  else { $status.BackColor = $C.sunk; $status.ForeColor = $C.ink; $status.Font = New-Object Drawing.Font('맑은 고딕', 9.5) }
 }
 
 $flow = New-Object Windows.Forms.FlowLayoutPanel
-$flow.Dock = 'Fill'; $flow.AutoScroll = $true; $flow.FlowDirection = 'LeftToRight'; $flow.WrapContents = $true; $flow.Padding = '6,4,6,4'
-$f.Controls.Add($flow); $f.Controls.Add($status)
-$inner = 262
-
-function Head([string]$t) {
-  $l = New-Object Windows.Forms.Label; $l.Text = $t; $l.Font = $bold; $l.ForeColor = $accent
-  $l.Width = $inner; $l.Height = 24; $l.TextAlign = 'BottomLeft'; $l.Margin = '2,8,2,2'
-  $flow.Controls.Add($l); $flow.SetFlowBreak($l, $false)
-}
+$flow.Dock = 'Fill'; $flow.AutoScroll = $true; $flow.FlowDirection = 'LeftToRight'; $flow.WrapContents = $true; $flow.Padding = '8,2,6,4'
+$f.Controls.Add($flow); $f.Controls.Add($bottom)
+$inner = 272; $half = 134
 $tt = New-Object Windows.Forms.ToolTip
-# 눌렀을 때 할 일은 스크립트 범위에서 실행한다(GetNewClosure를 쓰면 위의 함수를 못 찾는다).
-function Btn([string]$t, [scriptblock]$on, [int]$w = 128, [string]$tip = '') {
-  $b = New-Object Windows.Forms.Button; $b.Text = $t; $b.Width = $w; $b.Height = 28; $b.Margin = '2,2,2,2'
-  $b.FlatStyle = 'Flat'; $b.FlatAppearance.BorderColor = [Drawing.Color]::FromArgb(214, 220, 227); $b.BackColor = [Drawing.Color]::White
-  $b.Tag = $t
+
+function Head([string]$t, [string]$hint = '') {
+  $l = New-Object Windows.Forms.Label; $l.Width = $inner; $l.Height = 26; $l.Margin = '2,6,2,0'; $l.TextAlign = 'BottomLeft'
+  $l.Text = $t; $l.Font = $bold; $l.ForeColor = $C.accent
+  $flow.Controls.Add($l)
+  if ($hint) { $tt.SetToolTip($l, $hint) }
+}
+# kind: main(자주 쓰는 것, 연보라) / plain(흰색) ; key: 버튼 오른쪽에 작게 적는 단축키
+function Btn([string]$t, [scriptblock]$on, [int]$w = $half, [string]$tip = '', [string]$kind = 'plain', [string]$key = '', [int]$h = 30) {
+  $b = New-Object Windows.Forms.Button; $b.Text = $t; $b.Width = $w; $b.Height = $h; $b.Margin = '2,2,2,2'; $b.Tag = $t
+  $b.FlatStyle = 'Flat'
+  if ($kind -eq 'main') { $b.BackColor = $C.soft; $b.FlatAppearance.BorderColor = $C.softLine; $b.Font = $bold }
+  else { $b.BackColor = [Drawing.Color]::White; $b.FlatAppearance.BorderColor = $C.line }
+  if ($key) {
+    $b.TextAlign = 'MiddleLeft'; $b.Padding = '6,0,0,0'
+    $k = New-Object Windows.Forms.Label; $k.Text = $key; $k.Font = $small; $k.ForeColor = $C.muted; $k.BackColor = [Drawing.Color]::Transparent
+    $k.AutoSize = $false; $k.Width = 44; $k.Height = $h - 4; $k.TextAlign = 'MiddleRight'; $k.Left = $w - 48; $k.Top = 1
+    $k.Add_Click({ $this.Parent.PerformClick() }); $b.Controls.Add($k)
+  }
   $b.Add_Click($on)
   if ($tip) { $tt.SetToolTip($b, $tip) }
   $flow.Controls.Add($b); return $b
 }
+# '자간 [−][+]' 한 묶음 (반 줄 폭)
+function Pair([string]$name, [string]$down, [string]$up, [string]$tip = '') {
+  $l = New-Object Windows.Forms.Label; $l.Text = $name; $l.Width = 50; $l.Height = 30; $l.Margin = '2,2,2,2'; $l.TextAlign = 'MiddleLeft'
+  $flow.Controls.Add($l); if ($tip) { $tt.SetToolTip($l, $tip) }
+  $d = Btn '−' ([scriptblock]::Create("Do-Action '$down' '$name을(를) 줄였어요.'")) 36 "$name 줄이기"
+  $u = Btn '+' ([scriptblock]::Create("Do-Action '$up' '$name을(를) 늘렸어요.'")) 36 "$name 늘리기"
+  $d.Font = $bold; $u.Font = $bold
+}
 
-Head '글자 · 줄 (고른 글자에 적용)'
-Btn '자간 좁게' { Do-Action 'CharShapeSpacingDecrease' '자간을 1% 줄였어요.' } 128 'Shift+Alt+N과 같아요. 한 글자가 다음 줄로 넘어갈 때.' | Out-Null
-Btn '자간 넓게' { Do-Action 'CharShapeSpacingIncrease' '자간을 1% 늘렸어요.' } 128 'Shift+Alt+W와 같아요.' | Out-Null
-Btn '줄 간격 좁게' { Do-Action 'ParagraphShapeDecreaseLineSpacing' '줄 간격을 줄였어요.' } | Out-Null
-Btn '줄 간격 넓게' { Do-Action 'ParagraphShapeIncreaseLineSpacing' '줄 간격을 늘렸어요.' } | Out-Null
-Btn '장평 좁게' { Do-Action 'CharShapeWidthDecrease' '장평을 줄였어요.' } | Out-Null
-Btn '장평 넓게' { Do-Action 'CharShapeWidthIncrease' '장평을 늘렸어요.' } | Out-Null
-Btn '글자 작게' { Do-Action 'CharShapeHeightDecrease' '글자를 작게 했어요.' } | Out-Null
-Btn '글자 크게' { Do-Action 'CharShapeHeightIncrease' '글자를 크게 했어요.' } | Out-Null
-Btn '밑줄' { Do-Action 'CharShapeUnderline' '밑줄을 바꿨어요.' } 84 | Out-Null
-Btn '진하게' { Do-Action 'CharShapeBold' '진하게를 바꿨어요.' } 84 | Out-Null
-Btn '되돌리기' { Do-Action 'Undo' '한 단계 되돌렸어요.' } 86 'Ctrl+Z와 같아요.' | Out-Null
+Head '문항 서식' '커서가 있는 문단에 적용해요.'
+Btn '발문 (번호)' { Do-Action 'StyleShortcut2' "'문제' 스타일: 번호가 자동으로 붙어요." } $half '양식의 문제 스타일' 'main' 'Ctrl+2' | Out-Null
+Btn '선택지' { Do-Action 'StyleShortcut3' "'선택지' 스타일을 입혔어요." } $half '양식의 선택지 스타일' 'main' 'Ctrl+3' | Out-Null
+Btn '<보기> 안 글' { Do-Action 'StyleShortcut5' "'<보기> 안 내용' 스타일을 입혔어요." } $half '' 'main' 'Ctrl+5' | Out-Null
+Btn '바탕글' { Do-Action 'StyleShortcut1' '바탕글로 바꿨어요.' } $half '' 'main' 'Ctrl+1' | Out-Null
+Btn '여기서 줄 맞추기' { Do-Action 'ParagraphShapeIndentAtCaret' '커서 자리에 맞춰 다음 줄을 맞췄어요.' } $half 'Shift+Tab과 같아요. 두 줄 넘는 발문·선택지를 위아래로 맞출 때 커서를 맞출 글자 앞에 두고 누르세요.' | Out-Null
+Btn '부정어 밑줄' { Underline-Negative } $half "커서가 있는 발문에서 '않은·아닌·없는·틀린 것' 같은 말을 찾아 밑줄을 그어요." | Out-Null
 
-Head '문항 서식 (커서가 있는 문단)'
-Btn '발문 (번호 자동)' { Do-Action 'StyleShortcut2' "'문제' 스타일: 번호가 자동으로 붙어요." } 128 'Ctrl+2 (양식의 문제 스타일)' | Out-Null
-Btn '선택지' { Do-Action 'StyleShortcut3' "'선택지' 스타일을 입혔어요." } 128 'Ctrl+3 (양식의 선택지 스타일)' | Out-Null
-Btn '<보기> 안 글' { Do-Action 'StyleShortcut5' "'<보기> 안 내용' 스타일을 입혔어요." } 128 'Ctrl+5' | Out-Null
-Btn '바탕글 (번호 없음)' { Do-Action 'StyleShortcut1' '바탕글로 바꿨어요.' } 128 'Ctrl+1' | Out-Null
-Btn '여기서 줄 맞추기' { Do-Action 'ParagraphShapeIndentAtCaret' '커서 자리에 맞춰 다음 줄을 맞췄어요.' } 128 'Shift+Tab과 같아요. 두 줄 넘는 발문·선택지를 위아래로 맞출 때 커서를 맞출 글자 앞에 두고 누르세요.' | Out-Null
-Btn '부정어 밑줄' { Underline-Negative } 128 "커서가 있는 발문에서 '않은·아닌·없는·틀린 것' 같은 말을 찾아 밑줄을 그어요." | Out-Null
-$pm = Btn '−' { $script:point = [Math]::Max(0.1, [Math]::Round($script:point - 0.1, 1)); $pv.Text = '【' + $script:point.ToString('0.0') + '점】' } 30
-$pv = New-Object Windows.Forms.Label; $pv.Width = 70; $pv.Height = 28; $pv.TextAlign = 'MiddleCenter'; $pv.Font = $bold; $pv.Margin = '2,2,2,2'; $pv.Text = '【3.5점】'; $flow.Controls.Add($pv)
-$pp = Btn '+' { $script:point = [Math]::Round($script:point + 0.1, 1); $pv.Text = '【' + $script:point.ToString('0.0') + '점】' } 30
-Btn '배점 넣기' { Insert-Point } 122 '커서가 있는 문단 끝에 넣어요.' | Out-Null
+# 배점: 자주 쓰는 값은 한 번에, 0.1점은 −/+
+function Show-Point { $pv.Text = '【' + $script:point.ToString('0.0') + '점】' }
+Btn '−' { $script:point = [Math]::Max(0.1, [Math]::Round($script:point - 0.1, 1)); Show-Point } 30 '0.1점 내리기' | Out-Null
+$pv = New-Object Windows.Forms.Label; $pv.Width = 66; $pv.Height = 30; $pv.TextAlign = 'MiddleCenter'; $pv.Font = $bold; $pv.Margin = '2,2,2,2'; $flow.Controls.Add($pv); Show-Point
+Btn '+' { $script:point = [Math]::Round($script:point + 0.1, 1); Show-Point } 30 '0.1점 올리기' | Out-Null
+Btn '배점 넣기' { Insert-Point } 134 '커서가 있는 문단 끝에 넣어요.' 'main' | Out-Null
+foreach ($v in 2.5, 3, 3.5, 4, 4.5, 5) { Btn ($v.ToString('0.0')) { param($s) $script:point = [double]$s.Tag; Show-Point } 42 '' 'plain' '' 24 | Out-Null }
 
-Head '상자 넣기 (기출 모양 그대로)'
-Btn '<보기> 상자' { Insert-Box 'box_bogi.hwpx' '<보기> 상자를' } 128 | Out-Null
-Btn '지문 상자' { Insert-Box 'box_passage.hwpx' '지문 상자를' } 128 | Out-Null
-Btn '빈칸 (        )' { Insert-Symbol '(          )' } 128 | Out-Null
-Btn '☞ 다음 쪽에 계속' { Insert-Symbol '☞ 다음 쪽에 계속' } 128 | Out-Null
+Head '선택지' '①~⑤ 줄을 드래그해서 고른 뒤 누르세요. 발문 줄은 빼고 고릅니다.'
+Btn '짧은 것부터 ①' { Sort-Choices } $half '정답 번호가 바뀌면 아래에 노란 안내가 떠요.' 'main' | Out-Null
+Btn '번호 다시 매기기' { Renumber-Choices } $half '①②③④⑤가 빠지거나 겹쳤을 때 차례대로 고쳐요.' | Out-Null
 
-Head '선택지 (①~⑤ 줄을 드래그한 뒤)'
-Btn '짧은 것부터 ①' { Sort-Choices } 128 '선택지 글 길이가 짧은 것부터 ①~⑤로 다시 놓아요. 정답 번호가 바뀌니 아래 안내를 보고 고치세요.' | Out-Null
-Btn '번호 다시 매기기' { Renumber-Choices } 128 '①②③④⑤가 빠지거나 겹쳤을 때 차례대로 고쳐요.' | Out-Null
+Head '글자 · 줄' '고른 글자나 문단에 적용해요.'
+Pair '자간' 'CharShapeSpacingDecrease' 'CharShapeSpacingIncrease' 'Shift+Alt+N / W'
+Pair '줄 간격' 'ParagraphShapeDecreaseLineSpacing' 'ParagraphShapeIncreaseLineSpacing'
+Pair '장평' 'CharShapeWidthDecrease' 'CharShapeWidthIncrease'
+Pair '크기' 'CharShapeHeightDecrease' 'CharShapeHeightIncrease'
+Btn '밑줄' { Do-Action 'CharShapeUnderline' '밑줄을 바꿨어요.' } $half | Out-Null
+Btn '진하게' { Do-Action 'CharShapeBold' '진하게를 바꿨어요.' } $half | Out-Null
 
-Head '기호 넣기 (커서 자리에)'
+Head '상자 · 자주 쓰는 글' '기출에서 떼어 온 상자 모양 그대로 넣어요.'
+Btn '<보기> 상자' { Insert-Box 'box_bogi.hwpx' '<보기> 상자를' } $half | Out-Null
+Btn '지문 상자' { Insert-Box 'box_passage.hwpx' '지문 상자를' } $half | Out-Null
+Btn '빈칸 (      )' { Insert-Symbol '(          )' } 88 | Out-Null
+Btn '묶음 [ ~ ]' { Insert-Symbol '[  ~  ] 다음 글을 읽고 물음에 답하시오.' } 88 '세트 문항 지시문. 번호는 넣은 뒤 고치세요.' | Out-Null
+Btn '출처 -「」-' { Insert-Symbol '- 「」 -' } 88 '지문 아래 오른쪽에 넣어요.' | Out-Null
+Btn '☞ 다음 쪽에 계속' { Insert-Symbol '☞ 다음 쪽에 계속' } $inner | Out-Null
+
+# 기호: 위 줄에서 종류를 고르면 아래 줄 다섯 칸이 바뀐다(9줄 → 2줄)
+Head '기호 넣기' '커서 자리에 넣어요.'
+$setNames = @('A', 'a', '가', 'Ⓐ', 'ⓐ', '㉮', '①', 'ㄱ', '『』')
 $sets = @(
-  @('( A )', '( B )', '( C )', '( D )', '( E )'),
-  @('( a )', '( b )', '( c )', '( d )', '( e )'),
-  @('( 가 )', '( 나 )', '( 다 )', '( 라 )', '( 마 )'),
-  @('Ⓐ', 'Ⓑ', 'Ⓒ', 'Ⓓ', 'Ⓔ'),
-  @('ⓐ', 'ⓑ', 'ⓒ', 'ⓓ', 'ⓔ'),
-  @('㉮', '㉯', '㉰', '㉱', '㉲'),
-  @('①', '②', '③', '④', '⑤'),
-  @('ㄱ.', 'ㄴ.', 'ㄷ.', 'ㄹ.', 'ㅁ.')
+  @('( A )', '( B )', '( C )', '( D )', '( E )'), @('( a )', '( b )', '( c )', '( d )', '( e )'),
+  @('( 가 )', '( 나 )', '( 다 )', '( 라 )', '( 마 )'), @('Ⓐ', 'Ⓑ', 'Ⓒ', 'Ⓓ', 'Ⓔ'), @('ⓐ', 'ⓑ', 'ⓒ', 'ⓓ', 'ⓔ'),
+  @('㉮', '㉯', '㉰', '㉱', '㉲'), @('①', '②', '③', '④', '⑤'), @('ㄱ.', 'ㄴ.', 'ㄷ.', 'ㄹ.', 'ㅁ.'), @('○', '『』', '「」', '“”', '‘’')
 )
-foreach ($set in $sets) { foreach ($sym in $set) { Btn $sym { param($sender) Insert-Symbol ([string]$sender.Tag) } 50 | Out-Null } }
+$kindBtns = @(); $symBtns = @()
+function Pick-Set([int]$n) {
+  for ($j = 0; $j -lt $script:kindBtns.Count; $j++) { $b = $script:kindBtns[$j]; $on = ($j -eq $n)
+    $b.BackColor = $(if ($on) { $C.accent } else { [Drawing.Color]::White }); $b.ForeColor = $(if ($on) { [Drawing.Color]::White } else { $C.ink }) }
+  $vals = $sets[$n]; for ($i = 0; $i -lt 5; $i++) { $script:symBtns[$i].Text = $vals[$i]; $script:symBtns[$i].Tag = $vals[$i] }
+}
+for ($j = 0; $j -lt $setNames.Count; $j++) { $kb = Btn $setNames[$j] { param($s) Pick-Set ([int]$s.Name) } 28 '' 'plain' '' 26; $kb.Name = [string]$j; $kb.Margin = '1,2,1,2'; $kindBtns += $kb }
+for ($i = 0; $i -lt 5; $i++) { $symBtns += (Btn '' { param($s) Insert-Symbol ([string]$s.Tag) } 50 '' 'plain' '' 34) }
+Pick-Set 0
 
 $foot = New-Object Windows.Forms.Label; $foot.Text = '© 2026 Kang SeongHo · 비영리 공유 허락'; $foot.ForeColor = [Drawing.Color]::Gray
-$foot.Width = $inner; $foot.Height = 30; $foot.TextAlign = 'BottomLeft'; $flow.Controls.Add($foot)
+$foot.Width = $inner; $foot.Height = 28; $foot.TextAlign = 'BottomLeft'; $flow.Controls.Add($foot)
 
-# 개발용: 화면 없이 창 그림만 저장해 모양을 확인한다.
 if ($env:EXAM_HELPER_SNAPSHOT) {
+  if ($env:EXAM_HELPER_DEMO) { Set-Status $env:EXAM_HELPER_DEMO }
   $f.Show(); [Windows.Forms.Application]::DoEvents()
   $bmp = New-Object Drawing.Bitmap($f.Width, $f.Height); $f.DrawToBitmap($bmp, (New-Object Drawing.Rectangle(0, 0, $f.Width, $f.Height)))
   $bmp.Save($env:EXAM_HELPER_SNAPSHOT); $f.Close(); return

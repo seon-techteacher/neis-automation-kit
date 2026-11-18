@@ -171,6 +171,11 @@ dialog h2 { margin: 0 0 4px; font-size: 17px; color: var(--form); }
   <label class="chk"><input type="checkbox" data-opt="passive" checked> 피동·추측 표현</label>
   <label class="chk"><input type="checkbox" data-opt="caution" checked> 주의 표현</label>
   <label class="chk"><input type="checkbox" data-opt="similar" checked> 행특 학생 간 유사도</label>
+  <label class="chk"><input type="checkbox" data-opt="ai" checked> AI 글 흔적(**, 수식 코드)</label>
+  <label class="chk"><input type="checkbox" data-opt="subject" checked> 학생 이름·주어·기록 용어</label>
+  <label class="chk"><input type="checkbox" data-opt="repeat" checked> 한 칸 안 같은 문장 반복</label>
+  <label class="chk"><input type="checkbox" data-opt="sameSentence" checked> 행특 같은 문장 여러 학생</label>
+  <label class="chk"><input type="checkbox" data-opt="past"> 과거형 종결(~했음)</label>
   <label class="chk"><input type="checkbox" data-opt="middot"> 가운데점(·) 사용</label>
   </details>
 
@@ -306,6 +311,16 @@ const PASSIVE = [
   [/판단(?:됨|된다|되는)/g, '피동 표현: 관찰한 사실로'], [/것\s*같(?:음|다|아|은)/g, "추측 표현 '~것 같-': 관찰한 사실로"],
   [/듯\s*(?:함|하다|보임)/g, "추측 표현 '~듯': 관찰한 사실로"],
 ];
+// AI 글 흔적 [정규식, 단계, 안내] (2026-11-16 추가)
+const AI_TRACE = [
+  [/\*\*[^*\n]+\*\*|^\s*#{1,6}\s|```/gm, 3, 'AI 답변의 서식 기호(**, #) 그대로 남음: 지우고 입력'],
+  [/\$[^$\n]{1,60}\$|\\(?:frac|times|div|sqrt|cdot|left|right|alpha|beta|pi|leq|geq)\b|\^\{|_\{/g, 3, '수식 코드(LaTeX)가 그대로 남음: 나이스에서 깨짐. 글로 풀어 씀'],
+  [/다음은\s|아래는\s|작성해\s*(?:드|봤|보았)|물론입니다|도움이\s*되었|수정한\s*(?:버전|내용)|생활기록부\s*[:：]|세특\s*[:：]|행발\s*[:：]/g, 2, 'AI 답변 앞뒤 문구가 남은 것 같음: 확인'],
+];
+// 문장 첫머리의 '학생은·이 학생은·본 학생은'만 본다('다른 학생이 이해하도록' 같은 말은 빼려고).
+const SUBJECT_WORD = /(?:^|[.]\s*)(?:이|본|해당|위)?\s*학생(?:은|는)\s/gm;
+const RECORD_WORD = /수행\s*평가|생활\s*기록부|생기부|세부\s*능력\s*및\s*특기\s*사항|세특|행발|평가\s*기준/g;
+const PAST_END = /(?:했|하였|었|았|였)음(?=\s*[.]|\s*$)/gm;
 const OFFICER = /(?:(?:1|2)\s*학기\s*)?(?:전교|학년|학급)?\s*(?:학생\s*자치회\s*)?(?:부회장|회장|부반장|반장)/g;
 const TERM = /^\s*\(\s*\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?\s*[-~∼～–]\s*\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?\s*\)/;
 
@@ -864,6 +879,48 @@ function check(data, opt) {
         if (isExempt(sent) || endsProperly(sent)) continue;
         const tail = Math.max(a, b - 6);
         add(s, f, 2, '명사형 종결(~함, ~음, ~임)과 마침표 확인', tail, b);
+      }
+      // AI로 쓴 글을 붙여 넣을 때 남는 흔적 (2026-11-16 추가)
+      if (opt.ai && f !== '봉사') for (const [re, sev, msg] of AI_TRACE) each(re, sev, msg);
+      // 학생 이름·주어 (2026-11-16 추가)
+      if (opt.subject && !NO_ENDING.has(f)) {
+        const nm = String(s.이름 || '').replace(/\s/g, '');
+        if (nm.length >= 2) each(new RegExp(nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), 2, '학생 이름이 들어 있음: 주어는 생략함');
+        each(SUBJECT_WORD, 1, "주어('학생은' 등)는 생략함");
+        each(RECORD_WORD, 1, "기록 용어(수행평가·생기부 등) 대신 활동 내용으로 서술함");
+      }
+      // 한 칸 안에서 같은 문장을 두 번 씀 (2026-11-16 추가)
+      if (opt.repeat && !NO_ENDING.has(f)) {
+        const seenSent = new Map();
+        for (const [a, b] of sentenceRanges(text)) {
+          const key = norm(text.slice(a, b)).replace(/[.]$/, '');
+          if (key.length < 10) continue;
+          const n = (seenSent.get(key) || 0) + 1; seenSent.set(key, n);
+          if (n === 2) add(s, f, 2, '같은 문장이 두 번 이상 들어 있음', a, b);
+        }
+      }
+      if (opt.past && !NO_ENDING.has(f)) each(PAST_END, 1, '과거형 종결: 현재형(~함, ~임)으로 쓰는지 학교 기준 확인');
+    }
+  }
+
+  // 행특에서 같은 문장을 여러 학생이 그대로 씀 (문장 모음에서 골라 쓴 경우) (2026-11-16 추가)
+  if (opt.sameSentence) {
+    const where = new Map();
+    for (const s of data.students) {
+      const t = s.행동 || '', mine = new Set();
+      for (const [a, b] of sentenceRanges(t)) {
+        const key = norm(t.slice(a, b)).replace(/[.]$/, '');
+        if (key.length < 15 || mine.has(key)) continue;
+        mine.add(key);
+        if (!where.has(key)) where.set(key, []);
+        where.get(key).push([s, a, b]);
+      }
+    }
+    for (const list of where.values()) {
+      if (list.length < 2) continue;
+      for (const [s, a, b] of list) {
+        const others = list.filter(x => x[0] !== s).map(x => x[0].번호 + '번');
+        add(s, '행동', 1, `같은 문장을 ${list.length}명이 씀(${others.slice(0, 5).join(', ')}${others.length > 5 ? ' 등' : ''}): 학생별 장면으로 바꿀지 검토`, a, b);
       }
     }
   }

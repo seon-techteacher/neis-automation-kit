@@ -986,7 +986,9 @@ def link_hangul_helper():
     """업무도우미의 [시험지 편집 도우미] 단추는 «udesk-hangul:» 주소로 한글 옆 버튼 창을 연다.
     그 주소는 PC 마다 한 번 «편집 도우미 버튼 연결.cmd»로 등록해야 하는데, 안 하면 단추를 눌러도 아무 일도 없다
     (2026-11-17 실측 — 등록이 없어서 «잘 안 된다»). 위젯이 켜질 때 그 .cmd 와 똑같은 값을 현재 사용자(HKCU)에만 넣는다.
-    이미 이 키트 폴더를 가리키고 있으면 건드리지 않는다. 폴더를 옮겼으면 새 자리로 고쳐 넣는다."""
+    연결이 «있고 그 파일이 실제로 있으면» 건드리지 않는다 — 만든 분의 설치 파일(exam-helper-setup.cmd, v0.5.3~)은
+    %LOCALAPPDATA%\\udesk\\exam-helper 에 깔고 같은 연결을 거기로 건다. 그걸 위젯이 매번 키트 쪽으로 되돌리면 안 된다.
+    연결이 없거나, 가리키는 파일이 없어졌을 때(폴더를 옮김 등)만 키트 안의 도우미로 넣는다."""
     script = HERE.parent / "업무도우미" / "hangul" / "exam-helper.ps1"
     if os.name != "nt" or not script.exists():
         return
@@ -996,8 +998,10 @@ def link_hangul_helper():
         base = r"Software\Classes\udesk-hangul"
         try:
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, base + r"\shell\open\command") as k:
-                if winreg.QueryValueEx(k, "")[0] == want:
-                    return
+                cur = winreg.QueryValueEx(k, "")[0]
+            m = re.search(r'-File\s+"([^"]+)"', cur or "")
+            if m and Path(m.group(1)).exists():
+                return
         except OSError:
             pass
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base) as k:

@@ -1,7 +1,7 @@
 // 업무도우미 서비스 워커 · © 2026 Kang SeongHo
 // 앱 파일을 저장해 두어 인터넷이 끊겨도 열리게 한다. 서비스 워커 자체가 바뀌면 '새 버전' 안내를 띄운다.
 // 버전을 올릴 때 version.js와 함께 CACHE 이름을 바꾼다.
-const CACHE = 'udesk-0.5.0';
+const CACHE = 'udesk-0.5.3';
 const FILES = [
   './', 'index.html', 'common.css', 'common.js', 'quickcheck.js', 'version.js', 'manifest.webmanifest', 'icon.svg',
   'tools/seat.html', 'tools/check.html', 'tools/docs.html', 'tools/roster.html', 'tools/grade.html', 'tools/class.html', 'tools/score.html', 'tools/image.html', 'tools/exam.html'

@@ -45,6 +45,14 @@ window.QC = (() => {
   const ENGLISH_OK = new Set(['AI', 'SNS', 'PPT', 'UCC', 'IT', 'TV', 'PAPS', 'CEO', 'PD', 'POP', 'CF', 'PC']);
   const CAUTION = ['산만', '부족함', '떨어짐', '못함', '느림', '불성실', '나쁨', '무관심', '거짓말', 'ㅋㅋ', 'ㅎㅎ', '기타등등'];
 
+  const AI_TRACE = [
+    [/\*\*[^*\n]+\*\*|^\s*#{1,6}\s|```/gm, 3, 'AI 답변의 서식 기호(**, #) 그대로 남음: 지우고 입력'],
+    [/\$[^$\n]{1,60}\$|\\(?:frac|times|div|sqrt|cdot|left|right|alpha|beta|pi|leq|geq)\b|\^\{|_\{/g, 3, '수식 코드(LaTeX)가 그대로 남음: 나이스에서 깨짐. 글로 풀어 씀'],
+    [/다음은\s|아래는\s|작성해\s*(?:드|봤|보았)|물론입니다|도움이\s*되었|수정한\s*(?:버전|내용)|생활기록부\s*[:：]|세특\s*[:：]|행발\s*[:：]/g, 2, 'AI 답변 앞뒤 문구가 남은 것 같음: 확인'],
+  ];
+  const SUBJECT_WORD = /(?:^|[.]\s*)(?:이|본|해당|위)?\s*학생(?:은|는)\s/gm;
+  const RECORD_WORD = /수행\s*평가|생활\s*기록부|생기부|세부\s*능력\s*및\s*특기\s*사항|세특|행발|평가\s*기준/g;
+
   const bytes = s => [...s].reduce((n, ch) => n + (ch.charCodeAt(0) < 128 ? 1 : 3), 0);
 
   function sentenceRanges(text) {
@@ -99,11 +107,18 @@ window.QC = (() => {
       if (!TERM.test(text.slice(m.index + m[0].length))) add(2, "임원은 '전교·학년·학급'과 재임기간 (YYYY.MM.DD.-YYYY.MM.DD.) 병기 확인", m.index, m.index + m[0].length);
       else if (!/전교|학년|학급/.test(m[0])) add(2, '임원의 전교·학년·학급 범위 확인', m.index, m.index + m[0].length);
     }
+    const seenSent = new Map();
     for (const [a, b] of sentenceRanges(text)) {
       const sent = text.slice(a, b);
+      const key = sent.replace(/\s/g, '').replace(/[.]$/, ''), k = (seenSent.get(key) || 0) + 1; seenSent.set(key, k);
+      if (key.length >= 10 && k === 2) add(2, '같은 문장이 두 번 이상 들어 있음', a, b);
       if (isExempt(sent) || endsProperly(sent)) continue;
       add(2, '명사형 종결(~함, ~음, ~임)과 마침표 확인', Math.max(a, b - 6), b);
     }
+    // 2026-11-16: 점검기와 같이 AI 글 흔적, 주어, 기록 용어를 본다.
+    for (const [re, sev, msg] of AI_TRACE) each(re, sev, msg);
+    each(SUBJECT_WORD, 1, "주어('학생은' 등)는 생략함");
+    each(RECORD_WORD, 1, '기록 용어(수행평가·생기부 등) 대신 활동 내용으로 서술함');
     issues.sort((x, y) => y.sev - x.sev || x.start - y.start);
     return issues;
   }
