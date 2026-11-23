@@ -146,10 +146,13 @@ def known_folder(guid):
 
 
 def widget_file():
-    """학교 전용 상벌점판을 깐 PC(바로가기위젯_상벌점_설치.cmd 가 표시 파일을 둔다)면 상벌점판, 아니면 기본 위젯."""
-    flag = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "neis-automation" / "ealimi" / "enabled"
+    """출결판·학교 전용 상벌점판을 깐 PC(바로가기위젯_상벌점_설치.cmd 가 표시 파일을 둔다)면 상벌점판, 아니면 기본 위젯."""
+    base = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "neis-automation"
+    att = HERE / "바로가기위젯_출결.pyw"          # 출결판 (출결판_설치.cmd 가 출결\enabled 를 둔다)
+    if (base / "출결" / "enabled").exists() and att.exists():
+        return att
     alt = HERE / "바로가기위젯_상벌점.pyw"
-    return alt if flag.exists() and alt.exists() else HERE / "바로가기위젯.pyw"
+    return alt if (base / "ealimi" / "enabled").exists() and alt.exists() else HERE / "바로가기위젯.pyw"
 
 
 def make_shortcuts():

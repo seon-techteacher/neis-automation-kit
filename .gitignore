@@ -44,3 +44,12 @@ dist/
 나의결재선.json
 결재선.json
 결재선_*.json
+
+# 출결판 배포 zip 만드는 자리 (wheel·파이썬 설치 파일)
+출결판/_build/
+# 출결판 — 선생님 구글 키·토큰·크롬 임시 프로필 (원래 LOCALAPPDATA 아래 neis-automation/출결 에 생긴다)
+client.json
+client_secret*.json
+chrome_profile*/
+chrome_tmp_*/
+출결/
