@@ -209,7 +209,7 @@ def relogin_headless():
 SCAN_JS_ITEM = """() => {
   const $ = window.jQuery, vis = $('#divMessageArea').is(':visible');
   return { code: $('input[name="penaltyCode"]:checked').val(), piId: $('#penaltyItem').val(),
-    subject: $('#penaltyItem').find('option:selected').text(),
+    subject: $('#penaltyItem').find('option:selected').data('subject') || $('#penaltyItem').find('option:selected').text(),
     points: [...document.querySelectorAll('#penaltyPoint option')].map(o => o.value).filter(Boolean),
     push: { push_alrim: vis ? $('input[name="push_alrim"]:checked').val() : 0,
             push_target: vis ? $('input[data-elementtype="push_target"]:checked').map(function(){return $(this).val();}).get().join(',') : '',
@@ -232,14 +232,14 @@ def scan(page):
 
     # 벌점표 — 유형 → 분류 → 항목마다 허용 점수와 «등록 요청에 실제로 들어갈 값»
     types = page.evaluate("""() => [...document.querySelectorAll('label')]
-        .filter(x => /^penaltyCode\\d$/.test(x.getAttribute('for') || '')).map(x => x.innerText.trim())""")
+        .filter(x => /^penaltyCode_?\\d$/.test(x.getAttribute('for') || '')).map(x => x.innerText.trim())""")
     opts = lambda sel: page.eval_on_selector_all(sel + " option",
                                                  "os => os.filter(o => o.value).map(o => ({v: o.value, t: o.text.replace(/^_/, '').trim()}))")
     cat = {"at": date.today().isoformat(), "grades": grades, "types": {}}
     for t in types:
         out("STEP", "벌점표 받는 중 — " + t)
         page.evaluate("""t => [...document.querySelectorAll('label')].find(x =>
-            /^penaltyCode\\d$/.test(x.getAttribute('for') || '') && x.innerText.trim() === t).click()""", t)
+            /^penaltyCode_?\\d$/.test(x.getAttribute('for') || '') && x.innerText.trim() === t).click()""", t)
         page.wait_for_timeout(1200)
         cat["types"][t] = []
         for c in opts("#itemCategory"):
@@ -262,20 +262,20 @@ def scan(page):
         page.select_option("#selGroup1", g)
         close_popups(page)
         page.wait_for_function("""g => [...document.querySelectorAll('#selGroup2 option')]
-            .some(o => o.dataset.group1num === g)""", arg=g, timeout=15000)
+            .some(o => (o.dataset.group1 || o.dataset.group1num) === g)""", arg=g, timeout=15000)
         classes = page.evaluate("""g => [...document.querySelectorAll('#selGroup2 option')]
-            .filter(o => o.dataset.group1num === g && /^\\d+반$/.test(o.text.trim())).map(o => o.text.trim())""", g)
+            .filter(o => (o.dataset.group1 || o.dataset.group1num) === g && /^\\d+반$/.test(o.text.trim())).map(o => o.text.trim())""", g)
         for k in classes:
             page.select_option("#selGroup2", k)
             close_popups(page)
             want = g + "ㆍ" + k + "ㆍ"
             try:
                 page.wait_for_function("""w => [...document.querySelectorAll('input[type=checkbox][data-addrname]')]
-                    .some(i => (i.getAttribute('data-discription') || '').startsWith(w))""", arg=want, timeout=15000)
+                    .some(i => (i.getAttribute('data-description') || i.getAttribute('data-discription') || '').startsWith(w))""", arg=want, timeout=15000)
             except Exception:
                 continue                                  # 학생이 없는 반
             got = page.evaluate("""w => [...document.querySelectorAll('input[type=checkbox][data-addrname]')]
-                .map(i => [i.getAttribute('data-discription') || '', i.getAttribute('data-addrid')])
+                .map(i => [i.getAttribute('data-description') || i.getAttribute('data-discription') || '', i.getAttribute('data-pmid') || i.getAttribute('data-addrid')])
                 .filter(([d]) => d.startsWith(w))
                 .map(([d, pm]) => { const p = d.split('ㆍ'); return {klass: p[1], no: +p[2], name: p[3], pm: +pm || null}; })
                 .filter(s => s.name && Number.isInteger(s.no) && s.pm)""", want)
@@ -344,8 +344,30 @@ def strip(h):
 
 
 def points_list():
+    """부여내역 → [(ppid, [학년, 반, 번호, 이름, 유형, 분류, 항목, 점수, 부여자, 날짜])].
+    2026-11 e알리미가 목록을 표(<tr>)에서 카드(div.devPointItem)로 바꿨다 — 둘 다 읽는다."""
     st, html = http("/PenaltyV2/PointsList?pageNum=0&pageSize=50&pss_id=0&codes=&pic_id=0&pi_id=00&")
     rows = []
+    for it in html.split('devPointItem"')[1:]:
+        m = re.search(r'data-pp-id="(\d+)"', it) or re.search(r'data-ppid="(\d+)"', it)
+        if not m:
+            continue
+        name = strip((re.search(r"devPointNameLink[^>]*>([\s\S]*?)</a>", it) or [None, ""])[1] or "")
+        caps = [strip(x) for x in re.findall(r'<span class="caption_text[^"]*">([\s\S]*?)</span>', it)]
+        tag = strip((re.search(r'tag_text">([\s\S]*?)</span>', it) or [None, ""])[1] or "")
+        tm = re.match(r"^(.+?)\s*:\s*(-?\d+)", tag)
+        def val(key):
+            for c in caps:
+                mm = re.match(r"^" + key + r"\s*:\s*(.*)$", c)
+                if mm:
+                    return mm.group(1).strip()
+            return ""
+        rest = [c for c in caps if not re.match(r"^(학년|반|번호|부여자|부여일시)\s*:", c)]
+        if tm:
+            rows.append((m.group(1), [val("학년"), val("반"), val("번호"), name, tm.group(1), rest[0] if rest else "",
+                                      rest[1] if len(rest) > 1 else "", tm.group(2), val("부여자"), val("부여일시")]))
+    if rows:
+        return rows
     for tr in re.split(r"<tr[\s>]", html)[1:]:
         m = re.search(r'data-ppid="(\d+)"', tr)
         if m:
@@ -386,9 +408,12 @@ def cmd_give(a):
         p = "pp[%d]" % i
         st = people[s]
         body += [(p + "[CODE]", it["code"]), (p + "[PM_ID]", str(st["pm"])), (p + "[PI_ID]", it["piId"]),
-                 (p + "[SUBJECT]", it["subject"]), (p + "[POINT]", str(a.point)), (p + "[ETC]", ""),
+                 (p + "[SUBJECT]", re.sub(r"^_", "", it["subject"]).strip()), (p + "[POINT]", str(a.point)), (p + "[ETC]", ""),
                  (p + "[FINISHDATE]", day)]
-    body += [(k, "" if v is None else (str(v).lower() if isinstance(v, bool) else str(v))) for k, v in it["push"].items()]
+    # 학부모 알림은 보내지 않는다 — 화면의 «알림 발송 안함»(기본값)이 보내는 값과 같다 (2026-11-23 대조)
+    push = it.get("push") or {}
+    body += [("push_alrim", "0"), ("push_target", str(push.get("push_target") or "")), ("push_useSms", "false"),
+             ("push_isFirstMember", "true"), ("smsPhone", str(push.get("smsPhone") or ""))]
 
     for attempt in (1, 2):                      # 세션 확인은 «아무것도 안 보낸» 이 자리에서만 다시 한다
         try:
