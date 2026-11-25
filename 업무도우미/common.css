@@ -1,7 +1,7 @@
 /* 업무도우미 공통 스타일 · © 2026 Kang SeongHo
    좁은 패널(index.html)과 큰 작업 창(tools/*.html)이 함께 쓴다. 도구 분류는 네 가지 색으로 구분한다. */
 :root {
-  --bg: #e9edf1; --surface: #fbfcfd; --sunk: #eef1f5; --ink: #141d27; --ink-2: #3b4855; --muted: #66727f;
+  --bg: #e9edf1; --surface: #fbfcfd; --sunk: #eef1f5; --ink: #141d27; --ink-2: #3b4855; --muted: #5d6976;
   --line: #d6dce3; --accent: #1f3fae; --accent-ink: #ffffff; --accent-soft: #e3e9fa;
   --c-record: #1f3fae; --c-class: #1d7a55; --c-doc: #a8620c; --c-grade: #7a3a8f;
   --hl-red: #ffc2bc; --hl-orange: #ffd9a3; --hl-yellow: #fff08a;
@@ -67,14 +67,22 @@ mark { color: inherit; border-radius: 3px; padding: 1px 2px; }
 
 /* ── 큰 작업 창 공통 ── */
 .win { min-height: 100%; display: flex; flex-direction: column; background: var(--surface); }
-.w-head { display: flex; align-items: center; gap: 6px 18px; padding: 14px max(20px, env(safe-area-inset-right, 0px)) 0 max(20px, env(safe-area-inset-left, 0px)); flex-wrap: wrap; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); z-index: 5; }
+.w-head { display: flex; align-items: center; gap: 6px 18px; padding: 14px max(20px, calc((100% - 1160px) / 2)) 0; flex-wrap: wrap; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); z-index: 5; }
 .w-head h1 { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .w-head h1::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--c, var(--accent)); }
 .w-tabs { display: flex; gap: 2px; flex-wrap: wrap; }
 .w-tabs button { border: 0; background: none; padding: 6px 12px 12px; font-weight: 700; color: var(--muted); border-bottom: 3px solid transparent; }
 .w-tabs button.on { color: var(--c, var(--accent)); border-bottom-color: var(--c, var(--accent)); }
-.w-head .local { margin-left: auto; margin-bottom: 12px; font-size: .8rem; color: var(--muted); }
-.w-body { padding: 20px max(20px, env(safe-area-inset-right, 0px)) 40px max(20px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 16px; max-width: 1200px; width: 100%; }
+/* 개인정보 안내: 넣은 파일·명단은 서버로 보내지 않는다는 것을 자물쇠 표시와 함께 눈에 띄게 (2026-11-24) */
+:root { --lock: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E"); }
+.lock-ic, .w-head .local::before, .safe::before { content: ""; display: inline-block; width: 15px; height: 15px; flex: none; background: currentColor; -webkit-mask: var(--lock) center / contain no-repeat; mask: var(--lock) center / contain no-repeat; }
+.w-head .local { margin-left: auto; margin-bottom: 12px !important; display: inline-flex; align-items: center; gap: 7px; font-size: .82rem; color: var(--ok); background: var(--ok-soft); border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent); border-radius: 999px; padding: 5px 12px 5px 10px; font-weight: 600; }
+.w-head .local b { font-weight: 800; }
+/* 파일을 넣는 칸 안 맨 아래: 자물쇠 + 한 줄 (common.js dropZone 이 넣는다) */
+.drop { position: relative; }
+.safe { display: inline-flex; align-items: center; gap: 6px; font-size: .84rem; font-weight: 700; color: var(--ok); }
+.drop .safe { display: flex; justify-content: center; margin-top: 10px; }
+.w-body { padding: 20px max(20px, env(safe-area-inset-right, 0px)) 40px max(20px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 16px; max-width: 1200px; width: 100%; margin: 0 auto; }
 .w-body h2 { font-size: 1rem; font-weight: 800; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .grow { flex: 1; }

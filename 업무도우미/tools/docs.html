@@ -44,6 +44,26 @@ td .x { border: 0; background: none; color: var(--muted); font-size: 1.15rem; pa
 .tile:hover { border-color: var(--c); }
 .tile.over { border-style: solid; border-color: var(--c); background: color-mix(in srgb, var(--c) 10%, var(--surface)); transform: scale(1.02); }
 .tile.go { border-style: solid; }
+/* 둥근 메뉴: 파일을 끌어 오면 커서 둘레에 형식 칸이 둥글게 뜬다 (2026-11-23) */
+.stage { border: 2px dashed var(--line); border-radius: 18px; min-height: 300px; display: grid; place-items: center; text-align: center; padding: 28px 16px; background: var(--sunk); color: var(--muted); }
+.stage b { display: block; color: var(--ink); font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; margin: 10px 0 6px; }
+.stage .demo { width: 150px; height: 150px; margin: 0 auto; position: relative; }
+.stage .demo i { position: absolute; width: 34px; height: 34px; border-radius: 50%; background: color-mix(in srgb, var(--c) 18%, var(--surface)); border: 1px solid color-mix(in srgb, var(--c) 30%, var(--line)); }
+.stage .demo span { position: absolute; inset: 50px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; font-size: .75rem; color: var(--muted); }
+.ring-veil { position: fixed; inset: 0; z-index: 60; background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(4px); }
+.ring { position: fixed; width: 380px; height: 380px; margin: -190px 0 0 -190px; border-radius: 50%; z-index: 61;
+  background: var(--surface);
+  box-shadow: 0 18px 60px rgba(0,0,0,.18), 0 0 0 1px var(--line); animation: ringIn .14s ease-out; }
+@keyframes ringIn { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+.ring .slot { position: absolute; width: 84px; height: 84px; margin: -42px 0 0 -42px; border-radius: 50%; border: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  font-weight: 800; font-size: .98rem; color: var(--ink); background: var(--slot, var(--sunk)); transition: transform .1s, box-shadow .1s, opacity .1s; cursor: pointer; padding: 0 4px; line-height: 1.15; }
+.ring .slot small { font-size: .68rem; font-weight: 600; color: var(--ink-2); }
+.ring .slot.over, .ring .slot:hover:not(:disabled) { transform: scale(1.14); box-shadow: 0 0 0 3px var(--c), 0 8px 22px rgba(0,0,0,.16); }
+.ring .slot:disabled { opacity: .28; cursor: default; }
+.ring .mid { position: absolute; left: 50%; top: 50%; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface);
+  display: grid; place-items: center; font-weight: 800; color: var(--muted); font-size: .95rem; text-align: center; line-height: 1.3; padding: 8px; }
+.ring .mid.over { color: var(--bad); border-color: var(--bad); }
+.ring .lab { position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%); white-space: nowrap; font-size: .85rem; font-weight: 700; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
 .results { display: flex; flex-direction: column; gap: 6px; }
 .res { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
 .res .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
@@ -61,32 +81,14 @@ td .x { border: 0; background: none; color: var(--muted); font-size: 1.15rem; pa
   <header class="w-head">
     <h1>문서 도구</h1>
     <nav class="w-tabs" id="tabs">
-      <button data-tab="conv" class="on">바꾸기</button><button data-tab="size">용량 맞추기</button><button data-tab="pdf">PDF 편집</button><button data-tab="read">내용 보기</button>
+      <button data-tab="size" class="on">용량 맞추기</button><button data-tab="pdf">PDF 편집</button><button data-tab="read">내용 보기</button>
     </nav>
-    <span class="local">파일은 이 PC 안에서만 처리해요</span>
+    <span class="local"><b>서버에 올리지 않아요</b> 파일은 이 PC 안에서만 처리해요</span>
   </header>
 
-  <!-- 바꾸기 -->
-  <section class="w-body" data-pane="conv">
-    <p class="muted">바꾸고 싶은 형식의 칸에 파일을 끌어다 놓으세요. 바로 바꿔서 다운로드 폴더에 저장해요. 칸을 눌러 파일을 골라도 돼요.</p>
-    <div class="tiles" id="tiles">
-      <div class="tile" data-kind="txt" tabindex="0" role="button"><span class="to">→ TXT</span><b>글만 뽑기</b><small>한글(HWP·HWPX), PDF, 워드에서 글만</small></div>
-      <div class="tile" data-kind="doc" tabindex="0" role="button"><span class="to">→ 워드</span><b>워드로</b><small>한글(HWP·HWPX), PDF의 글과 표를 워드에서 열리게</small></div>
-      <div class="tile" data-kind="xlsx" tabindex="0" role="button"><span class="to">→ 엑셀</span><b>표를 엑셀로</b><small>한글(HWPX), 워드 문서 속 표를 시트로</small></div>
-      <div class="tile" data-kind="pdf" tabindex="0" role="button"><span class="to">→ PDF</span><b>사진을 PDF로</b><small>사진 여러 장을 한 PDF로 (한 장이 한 쪽)</small></div>
-      <div class="tile" data-kind="jpg" tabindex="0" role="button"><span class="to">→ JPG</span><b>PDF를 그림으로</b><small>PDF의 쪽마다 사진 한 장으로</small></div>
-      <div class="tile go" data-kind="size" tabindex="0" role="button"><span class="to">합계 <span id="tgt"></span>MB</span><b>용량 줄이기</b><small>첨부할 사진·PDF를 합쳐서 제한 아래로</small></div>
-      <div class="tile go" data-kind="merge" tabindex="0" role="button"><span class="to">→ PDF 하나</span><b>PDF 합치기</b><small>PDF와 사진을 순서대로 한 파일로</small></div>
-    </div>
-    <input type="file" id="cvFile" multiple hidden>
-    <div class="status" id="cvStatus"></div>
-    <div class="results" id="cvOut"></div>
-    <div class="row" id="cvActs" hidden><button class="btn" id="cvZip">모두 ZIP으로 저장</button><button class="btn" id="cvClear">목록 비우기</button></div>
-    <p class="muted small">한글 파일의 글꼴·줄 간격 같은 모양까지 그대로 옮기지는 못해요. 옛 한글(HWP) 파일의 표는 칸 순서대로 글로 나와요.</p>
-  </section>
 
   <!-- 용량 맞추기 -->
-  <section class="w-body" data-pane="size" hidden>
+  <section class="w-body" data-pane="size">
     <div class="drop" id="szDrop"><b>첨부할 파일을 모두 여기에 끌어다 놓으세요</b>사진(JPG·PNG)과 PDF를 줄여서 합계를 맞춰요. 눌러서 골라도 돼요.<input type="file" id="szFile" multiple hidden></div>
     <div id="szMain" hidden>
       <div class="sum">
@@ -150,8 +152,83 @@ const MB = 1048576;
 const IMG_LV = [[2560, .85, '긴 변 2560px'], [1920, .8, '긴 변 1920px'], [1600, .75, '긴 변 1600px'], [1280, .7, '긴 변 1280px'], [1024, .65, '긴 변 1024px'], [800, .6, '긴 변 800px']];
 const PDF_LV = [[150, .75, '그림으로 (선명하게)'], [120, .7, '그림으로 (보통)'], [100, .6, '그림으로 (작게)'], [80, .5, '그림으로 (아주 작게)']];
 let szItems = [], szBusy = false, szRun = 0;
-const kindOf = f => /^image\/(jpeg|png|webp|bmp)$/.test(f.type) || /\.(jpe?g|png|webp|bmp)$/i.test(f.name) ? 'image' : (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) ? 'pdf' : 'other';
-const levelsOf = it => it.kind === 'image' ? IMG_LV : it.kind === 'pdf' ? PDF_LV : [];
+const kindOf = f => /^image\/(jpeg|png|webp|bmp)$/.test(f.type) || /\.(jpe?g|png|webp|bmp)$/i.test(f.name) ? 'image'
+  : (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) ? 'pdf'
+  : /\.(hwpx|pptx|docx|xlsx)$/i.test(f.name) ? 'pack' : /\.hwp$/i.test(f.name) ? 'hwp' : 'other';
+// 한글(HWPX)·PPT·워드·엑셀: 파일 안의 그림을 줄이고, Windows에 늘 있는 글꼴을 문서에 넣어 둔 것은 뺀다 (2026-11-24)
+const PACK_LV = [[2560, .85, '안의 그림 선명하게'], [1920, .8, '안의 그림 보통'], [1600, .75, '안의 그림 조금 작게'], [1280, .7, '안의 그림 작게'], [1024, .65, '안의 그림 더 작게'], [800, .6, '안의 그림 아주 작게']];
+const levelsOf = it => it.kind === 'image' ? IMG_LV : it.kind === 'pdf' ? PDF_LV : it.kind === 'pack' ? PACK_LV : [];
+// Windows에 기본으로 깔려 있는 글꼴: 문서에 넣어 두지 않아도 어느 PC에서나 똑같이 보인다.
+const WIN_FONTS = /^(맑은\s*고딕|Malgun Gothic|굴림|굴림체|Gulim|GulimChe|돋움|돋움체|Dotum|DotumChe|바탕|바탕체|Batang|BatangChe|궁서|궁서체|Gungsuh|Arial|Arial Black|Calibri|Calibri Light|Cambria|Candara|Consolas|Constantia|Corbel|Segoe UI|Tahoma|Times New Roman|Verdana|Georgia|Trebuchet MS|Courier New|Comic Sans MS|Impact|Symbol|Wingdings)$/i;
+const MEDIA_DIR = { hwpx: /^BinData\//, pptx: /^ppt\/media\//, docx: /^word\/media\//, xlsx: /^xl\/media\// };
+async function shrinkPack(file, [max, q]) {
+  const ext = extOf(file.name), zip = await JSZip.loadAsync(file), notes = [], renamed = {};
+  // 1) 문서에 넣어 둔 기본 글꼴 빼기 (PPT·워드)
+  // whole: 참이면 글꼴 항목 전체를 지우고(PPT), 거짓이면 항목은 두고 '넣어 둔 글꼴' 표시만 지운다(워드).
+  const dropFonts = async (xmlPath, relsPath, blockRe, nameRe, idRe, whole) => {
+    const xf = zip.file(xmlPath), rf = zip.file(relsPath); if (!xf || !rf) return;
+    let xml = await xf.async('string'), rels = await rf.async('string'); const gone = [], keep = new Set();
+    xml = xml.replace(blockRe, block => {
+      const name = (block.match(nameRe) || [])[1] || '';
+      if (!WIN_FONTS.test(name.trim())) { keep.add(name); return block; }
+      gone.push(name); for (const m of block.matchAll(idRe)) {
+        const id = m[1], rm = rels.match(new RegExp(`<Relationship[^>]*Id="${id}"[^>]*/>`));
+        if (rm) { const t = (rm[0].match(/Target="([^"]+)"/) || [])[1]; rels = rels.replace(rm[0], ''); if (t) { const p = (relsPath.replace(/_rels\/[^/]+$/, '') + t).replace(/[^/]+\/\.\.\//g, ''); zip.remove(p); } }
+      }
+      return whole ? '' : block.replace(/<w:embed(?:Regular|Bold|Italic|BoldItalic)[^>]*\/>/g, '');
+    });
+    if (gone.length) { zip.file(xmlPath, xml); zip.file(relsPath, rels); notes.push(`넣어 둔 기본 글꼴(${[...new Set(gone)].join(', ')}) 뺌`); }
+    if (keep.size) notes.push(`넣어 둔 글꼴(${[...keep].join(', ')})은 그대로`);
+  };
+  if (ext === 'pptx') {
+    await dropFonts('ppt/presentation.xml', 'ppt/_rels/presentation.xml.rels', /<p:embeddedFont>[\s\S]*?<\/p:embeddedFont>/g, /typeface="([^"]+)"/, /r:id="([^"]+)"/g, true);
+    const pf = zip.file('ppt/presentation.xml');
+    if (pf) { let x = await pf.async('string'); if (/<p:embeddedFontLst>\s*<\/p:embeddedFontLst>/.test(x)) zip.file('ppt/presentation.xml', x.replace(/<p:embeddedFontLst>\s*<\/p:embeddedFontLst>/, '')); }
+  }
+  if (ext === 'docx') await dropFonts('word/fontTable.xml', 'word/_rels/fontTable.xml.rels', /<w:font [\s\S]*?<\/w:font>/g, /w:name="([^"]+)"/, /r:id="([^"]+)"/g, false);
+  // 2) 안의 그림 줄이기: JPG는 다시 저장, 투명한 곳이 없는 PNG·BMP는 JPG로 바꾼다(파일 이름과 참조도 함께 고침).
+  let imgBefore = 0, imgAfter = 0;
+  for (const path of Object.keys(zip.files).filter(p => MEDIA_DIR[ext].test(p) && /\.(jpe?g|png|bmp)$/i.test(p))) {
+    const data = await zip.file(path).async('blob'); imgBefore += data.size;
+    let bmp; try { bmp = await createImageBitmap(data); } catch { imgAfter += data.size; continue; }
+    const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+    const x = c.getContext('2d'); x.drawImage(bmp, 0, 0, c.width, c.height); bmp.close && bmp.close();
+    const isJpg = /\.jpe?g$/i.test(path);
+    let opaque = isJpg;
+    if (!isJpg) { const d = x.getImageData(0, 0, c.width, c.height).data; opaque = true; for (let i = 3; i < d.length; i += 4) if (d[i] < 255) { opaque = false; break; } }
+    let out = null, newPath = path;
+    if (opaque) {
+      const flat = document.createElement('canvas'); flat.width = c.width; flat.height = c.height;
+      const fx = flat.getContext('2d'); fx.fillStyle = '#fff'; fx.fillRect(0, 0, c.width, c.height); fx.drawImage(c, 0, 0);
+      out = await new Promise(ok => flat.toBlob(ok, 'image/jpeg', q));
+      if (!isJpg) newPath = path.replace(/\.(png|bmp)$/i, '.jpg');
+    } else if (k < 1) out = await new Promise(ok => c.toBlob(ok, 'image/png'));
+    c.width = c.height = 0;
+    if (out && out.size < data.size * 0.95 && !(newPath !== path && zip.file(newPath))) {
+      zip.remove(path); zip.file(newPath, out); imgAfter += out.size;
+      if (newPath !== path) renamed[path] = newPath;
+    } else imgAfter += data.size;
+  }
+  // 3) 이름을 바꾼 그림의 참조 고치기
+  const pairs = Object.entries(renamed);
+  if (pairs.length) {
+    const textParts = Object.keys(zip.files).filter(p => /\.(xml|rels|hpf)$/i.test(p) || p === '[Content_Types].xml');
+    for (const p of textParts) {
+      let t = await zip.file(p).async('string'), t0 = t;
+      for (const [a, b] of pairs) { const an = a.split('/').pop(), bn = b.split('/').pop(); t = t.split('media/' + an).join('media/' + bn).split('BinData/' + an).join('BinData/' + bn); }
+      if (ext === 'hwpx' && p.endsWith('.hpf')) t = t.replace(/(<opf:item\b[^>]*href="BinData\/[^"]+\.jpg"[^>]*media-type=")image\/(?:png|bmp)(")/g, '$1image/jpg$2').replace(/(<opf:item\b[^>]*media-type=")image\/(?:png|bmp)("[^>]*href="BinData\/[^"]+\.jpg")/g, '$1image/jpg$2');
+      if (p === '[Content_Types].xml' && !/Extension="jpg"/i.test(t)) t = t.replace('</Types>', '<Default Extension="jpg" ContentType="image/jpeg"/></Types>');
+      if (t !== t0) zip.file(p, t);
+    }
+  }
+  if (imgBefore && imgAfter < imgBefore) notes.push(`안의 그림 ${fmtMB(imgBefore)} → ${fmtMB(imgAfter)}`);
+  // HWPX는 mimetype이 맨 앞에, 압축 없이 있어야 한글이 연다.
+  const mt = zip.file('mimetype'); if (mt) zip.file('mimetype', await mt.async('string'), { compression: 'STORE' });
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 9 }, mimeType: file.type || 'application/octet-stream' });
+  blob.notes = notes;
+  return blob;
+}
 const sizeOf = it => it.level < 0 ? it.file.size : it.cache[it.level].size;
 const total = () => szItems.reduce((s, it) => s + sizeOf(it), 0);
 const targetBytes = () => (parseFloat($('szTarget').value) || S.targetMB) * MB;
@@ -188,11 +265,12 @@ async function ensure(it, lv) {
   $('szStatus').textContent = `${it.file.name} 줄이는 중…`;
   try {
     const blob = it.kind === 'image' ? await shrinkImage(it.file, IMG_LV[lv])
+      : it.kind === 'pack' ? await shrinkPack(it.file, PACK_LV[lv])
       : await shrinkPdf(it.file, PDF_LV[lv], (p, n) => { $('szStatus').textContent = `${it.file.name} 줄이는 중… ${p}/${n}쪽`; });
     if (!blob) throw new Error('변환 실패');
     it.cache[lv] = blob;
     return true;
-  } catch (e) { it.error = it.kind === 'pdf' ? '열 수 없는 PDF예요 (암호가 걸렸거나 손상됨)' : '읽을 수 없는 사진이에요'; return false; }
+  } catch (e) { it.error = it.kind === 'pdf' ? '열 수 없는 PDF예요 (암호가 걸렸거나 손상됨)' : it.kind === 'pack' ? '열 수 없는 파일이에요 (암호가 걸렸거나 손상됨)' : '읽을 수 없는 사진이에요'; return false; }
 }
 async function szProcess() {
   const run = ++szRun; szBusy = true; szRender();
@@ -236,10 +314,12 @@ function szRender() {
   g.setAttribute('aria-label', `줄이기 전 ${fmtMB(before)}, 줄인 뒤 ${fmtMB(after)}, 제한 ${fmtMB(target)}`);
   $('szTbl').innerHTML = '<tr><th>파일</th><th class="r">전</th><th class="r">후</th><th>줄이는 방법</th><th>상태</th><th></th></tr>' + szItems.map((it, i) => {
     const lvs = levelsOf(it), changed = it.level >= 0;
-    const method = it.kind === 'other' ? '<span class="muted">이 형식은 여기서 줄일 수 없어요</span>'
+    const method = it.kind === 'hwp' ? '<span class="muted">옛 한글(HWP)은 여기서 못 줄여요. 한글에서 <b>다른 이름으로 저장 → HWPX</b>로 저장해 넣으면 안의 그림을 줄일 수 있어요</span>'
+      : it.kind === 'other' ? '<span class="muted">이 형식은 여기서 줄일 수 없어요</span>'
       : `<select data-i="${i}" aria-label="줄이는 방법" ${szBusy ? 'disabled' : ''}><option value="auto" ${it.pick === 'auto' ? 'selected' : ''}>자동${it.pick === 'auto' && changed ? ' → ' + lvs[it.level][2] : ''}</option><option value="-1" ${it.pick === '-1' ? 'selected' : ''}>그대로 두기</option>${lvs.map((l, k) => `<option value="${k}" ${it.pick === String(k) ? 'selected' : ''}>${l[2]}</option>`).join('')}</select>`;
+    const notes = changed && it.cache[it.level].notes ? it.cache[it.level].notes : [];
     const state = it.error ? `<span class="pill bad">${esc(it.error)}</span>` : changed ? (it.kind === 'pdf' ? '<span class="pill warn">글자 검색 안 됨</span>' : '<span class="pill ok">줄였어요</span>') : '<span class="pill flat">그대로</span>';
-    return `<tr><td><b>${esc(it.file.name)}</b><small>${it.kind === 'image' ? '사진' : it.kind === 'pdf' ? 'PDF' : extOf(it.file.name).toUpperCase() + ' 파일'}</small></td>
+    return `<tr><td><b>${esc(it.file.name)}</b><small>${it.kind === 'image' ? '사진' : it.kind === 'pdf' ? 'PDF' : extOf(it.file.name).toUpperCase() + ' 파일'}${notes.length ? ' · ' + esc(notes.join(' · ')) : ''}</small></td>
       <td class="r num">${fmtMB(it.file.size)}</td><td class="r num"><b>${fmtMB(sizeOf(it))}</b></td><td>${method}</td><td>${state}</td><td><button class="x" data-del="${i}" aria-label="빼기" ${szBusy ? 'disabled' : ''}>×</button></td></tr>`;
   }).join('');
   $('szNote').hidden = !szItems.some(it => it.kind === 'pdf' && it.level >= 0);
@@ -247,7 +327,7 @@ function szRender() {
   $('szSave').textContent = `파일 ${szItems.length}개 저장`;
   $('szSave').disabled = $('szZip').disabled = szBusy;
 }
-const outName = it => it.level < 0 ? it.file.name : baseName(it.file.name) + '_줄임.' + (it.kind === 'image' ? 'jpg' : 'pdf');
+const outName = it => it.level < 0 ? it.file.name : baseName(it.file.name) + '_줄임.' + (it.kind === 'image' ? 'jpg' : it.kind === 'pack' ? extOf(it.file.name) : 'pdf');
 const outBlob = it => it.level < 0 ? it.file : it.cache[it.level];
 dropZone($('szDrop'), $('szFile'), files => {
   for (const f of files) szItems.push({ file: f, kind: kindOf(f), pick: 'auto', level: -1, cache: {}, error: '' });
@@ -276,7 +356,7 @@ function mgRender() {
     <td><b>${esc(f.name)}</b></td><td class="r num">${fmtMB(f.size)}</td><td><button class="x" data-del="${i}" aria-label="빼기">×</button></td></tr>`).join('');
 }
 dropZone($('mgDrop'), $('mgFile'), files => {
-  const ok = files.filter(f => kindOf(f) !== 'other');
+  const ok = files.filter(f => ['pdf', 'image'].includes(kindOf(f)));
   if (ok.length < files.length) toast('PDF와 사진만 넣을 수 있어요.');
   mgItems.push(...ok); mgRender();
 });
@@ -314,12 +394,13 @@ $('mgGo').addEventListener('click', async () => {
 });
 
 let pgFile = null, pgCount = 0;
-dropZone($('pgDrop'), $('pgFile'), async files => {
+dropZone($('pgDrop'), $('pgFile'), files => pgLoad(files));
+async function pgLoad(files) {
   const f = files[0];
   try { pgCount = (await PDFLib.PDFDocument.load(await f.arrayBuffer())).getPageCount(); }
   catch { $('pgStatus').textContent = '열 수 없는 PDF예요. 암호가 걸렸는지 확인해 주세요.'; return; }
   pgFile = f; $('pgOpts').hidden = false; $('pgName').textContent = `${f.name} (${pgCount}쪽)`; $('pgStatus').textContent = '';
-});
+}
 // "1-3, 5" → [0,1,2,4]. 잘못된 값이면 null.
 function parseRange(text, n) {
   if (!text.trim()) return [...Array(n).keys()];
@@ -479,7 +560,7 @@ async function imagesToPdf(files) {
   return new Blob([await out.save()], { type: 'application/pdf' });
 }
 function cvRender() {
-  $('cvOut').innerHTML = cvResults.map((r, i) => `<div class="res"><span class="nm">${esc(r.name)}<small>${r.blob ? fmtMB(r.blob.size) : esc(r.error)}</small></span>${r.blob ? `<span class="pill ok">바꿨어요</span><button class="btn" data-i="${i}">다시 저장</button>` : '<span class="pill bad">못 바꿨어요</span>'}</div>`).join('');
+  $('cvOut').innerHTML = cvResults.map((r, i) => `<div class="res"><span class="nm">${esc(r.name)}<small>${r.blob ? esc(r.note || fmtMB(r.blob.size)) : esc(r.error)}</small></span>${r.blob ? `<span class="pill ok">바꿨어요</span><button class="btn" data-i="${i}">다시 저장</button>` : '<span class="pill bad">못 바꿨어요</span>'}</div>`).join('');
   $('cvActs').hidden = !cvResults.length;
   $('cvZip').hidden = cvResults.filter(r => r.blob).length < 2;
 }
@@ -487,7 +568,7 @@ async function convert(kind, files) {
   if (kind === 'size' || kind === 'merge') {
     // 이 두 가지는 확인할 것이 있어서 해당 탭으로 넘긴다.
     if (kind === 'size') { for (const f of files) szItems.push({ file: f, kind: kindOf(f), pick: 'auto', level: -1, cache: {}, error: '' }); szProcess(); }
-    else { const ok = files.filter(f => kindOf(f) !== 'other'); if (ok.length < files.length) toast('PDF와 사진만 합칠 수 있어요.'); mgItems.push(...ok); mgRender(); }
+    else { const ok = files.filter(f => ['pdf', 'image'].includes(kindOf(f))); if (ok.length < files.length) toast('PDF와 사진만 합칠 수 있어요.'); mgItems.push(...ok); mgRender(); }
     $('tabs').querySelector(`[data-tab="${kind === 'size' ? 'size' : 'pdf'}"]`).click(); return;
   }
   const st = $('cvStatus'), good = files.filter(f => ACCEPT[kind].includes(extOf(f.name))), bad = files.filter(f => !good.includes(f));
@@ -517,23 +598,6 @@ async function zipSave(list, name) {
   const zip = new JSZip(), used = new Set();
   for (const r of list) { let n = r.name, k = 2; while (used.has(n)) n = `${baseName(r.name)} (${k++}).${extOf(r.name)}`; used.add(n); zip.file(n, r.blob); }
   saveBlob(await zip.generateAsync({ type: 'blob', compression: 'STORE' }), name);
-}
-{
-  const tiles = $('tiles'), input = $('cvFile'), tileOf = e => e.target.closest('.tile');
-  tiles.addEventListener('dragover', e => { const t = tileOf(e); if (!t) return; e.preventDefault(); tiles.querySelectorAll('.tile').forEach(x => x.classList.toggle('over', x === t)); });
-  tiles.addEventListener('dragleave', e => { const t = tileOf(e); if (t && !t.contains(e.relatedTarget)) t.classList.remove('over'); });
-  tiles.addEventListener('drop', e => { const t = tileOf(e); if (!t) return; e.preventDefault(); t.classList.remove('over'); const f = [...e.dataTransfer.files]; if (f.length) convert(t.dataset.kind, f); });
-  const pick = t => { cvKind = t.dataset.kind; input.accept = ACCEPT[cvKind] ? ACCEPT[cvKind].map(x => '.' + x).join(',') : ''; input.click(); };
-  tiles.addEventListener('click', e => { const t = tileOf(e); if (t) pick(t); });
-  tiles.addEventListener('keydown', e => { const t = tileOf(e); if (t && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pick(t); } });
-  input.addEventListener('change', () => { const f = [...input.files]; input.value = ''; if (f.length) convert(cvKind, f); });
-  // 칸 밖에 놓으면 브라우저가 파일을 열어 버리지 않게 막고 안내한다.
-  window.addEventListener('dragover', e => e.preventDefault());
-  window.addEventListener('drop', e => { e.preventDefault(); if (!e.target.closest('.tile, .drop')) toast('바꿀 형식의 칸 위에 놓아 주세요.'); });
-  $('cvOut').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) { const r = cvResults[+b.dataset.i]; saveBlob(r.blob, r.name); } });
-  $('cvZip').addEventListener('click', () => zipSave(cvResults.filter(r => r.blob), '변환 결과.zip'));
-  $('cvClear').addEventListener('click', () => { cvResults = []; cvRender(); $('cvStatus').textContent = ''; });
-  $('tgt').textContent = S.targetMB;
 }
 dropZone($('rdDrop'), $('rdFile'), async files => {
   const f = files[0], ext = extOf(f.name), st = $('rdStatus');

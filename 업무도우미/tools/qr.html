@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR 만들기 · 업무도우미</title>
+<meta name="author" content="Kang SeongHo">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../common.css">
+<style>
+.win { --c: var(--c-doc); }
+.when { font-size: .9rem; color: var(--ink-2); background: var(--sunk); border-radius: 10px; padding: 10px 14px; }
+.when b { color: var(--ink); }
+.opts { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.opts label { display: inline-flex; align-items: center; gap: 6px; }
+#qrBox { padding: 20px; background: #fff; border-radius: 12px; border: 1px solid var(--line); display: inline-block; }
+#qrBox img, #qrBox canvas { display: block; }
+.cap { font-weight: 700; margin-top: 8px; color: #111; text-align: center; max-width: 512px; word-break: break-all; }
+</style>
+<script src="../lib/qrcode.min.js"></script>
+<script src="../common.js"></script>
+</head>
+<body>
+<div class="win">
+  <header class="w-head">
+    <h1>QR 만들기</h1>
+    <span class="local"><b>서버에 올리지 않아요</b> QR은 이 PC에서 만들어요</span>
+  </header>
+  <section class="w-body">
+    <p class="when"><b>이럴 때 써요</b> 구글 설문·패들렛·수업 자료 주소를 학생이나 학부모가 휴대폰으로 바로 열게 할 때. 가정통신문이나 PPT에 그림으로 붙이면 돼요.</p>
+    <label class="field"><span>주소나 글</span><input id="qText" placeholder="https://… (설문 주소 등)" autocomplete="off"></label>
+    <div class="opts">
+      <label>크기 <select id="qSize"><option value="200">작게</option><option value="320" selected>보통</option><option value="512">크게</option></select></label>
+      <label>아래 글씨 <input id="qCap" placeholder="예: 학부모 상담 신청" style="width:14em"></label>
+      <button class="btn primary big" id="qGo">QR 만들기</button><button class="btn big" id="qSave" disabled>그림으로 저장</button><button class="btn big" id="qCopy" disabled>그림 복사</button>
+    </div>
+    <div><div id="qrBox" hidden><div id="qrCode"></div><div class="cap" id="qrCapView"></div></div></div>
+    <p class="muted small">주소가 길수록 QR이 촘촘해져요. 너무 촘촘하면 단축 주소를 쓰세요.</p>
+  </section>
+</div>
+<script>
+'use strict';
+function make() {
+  const text = $('qText').value.trim(); if (!text) { toast('주소나 글을 넣어 주세요.'); $('qText').focus(); return; }
+  const box = $('qrCode'), size = +$('qSize').value; box.innerHTML = ''; $('qrBox').hidden = false;
+  $('qrCapView').textContent = $('qCap').value.trim();
+  try { new QRCode(box, { text, width: size, height: size, correctLevel: QRCode.CorrectLevel.M }); $('qSave').disabled = $('qCopy').disabled = false; }
+  catch { $('qrBox').hidden = true; box.innerHTML = ''; $('qSave').disabled = $('qCopy').disabled = true; toast('글이 너무 길어요. 줄여서 다시 해 보세요.'); }
+}
+// 흰 여백과 아래 글씨를 넣은 그림을 만든다(여백이 있어야 잘 읽힌다).
+function picture() {
+  const src = $('qrCode').querySelector('canvas'); if (!src) return null;
+  const cap = $('qCap').value.trim(), m = 28, capH = cap ? 44 : 0;
+  const c = document.createElement('canvas'); c.width = src.width + m * 2; c.height = src.height + m * 2 + capH;
+  const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(src, m, m);
+  if (cap) { x.fillStyle = '#111'; x.font = '700 22px "Malgun Gothic", sans-serif'; x.textAlign = 'center'; x.fillText(cap, c.width / 2, src.height + m + 30, c.width - 20); }
+  return c;
+}
+$('qGo').addEventListener('click', make);
+$('qText').addEventListener('keydown', e => { if (e.key === 'Enter') make(); });
+$('qSave').addEventListener('click', () => { const c = picture(); if (c) c.toBlob(b => saveBlob(b, ($('qCap').value.trim() || 'QR') + '.png'), 'image/png'); });
+$('qCopy').addEventListener('click', () => {
+  const c = picture(); if (!c) return;
+  c.toBlob(async b => { try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]); toast('그림을 복사했어요. 한글·PPT에 붙여 넣으세요.'); } catch { toast('복사하지 못했어요. 그림으로 저장해 주세요.'); } }, 'image/png');
+});
+</script>
+</body>
+</html>

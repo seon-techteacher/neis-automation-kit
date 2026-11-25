@@ -13,10 +13,10 @@
 <script src="../lib/html2canvas.min.js" defer></script>
 <style>
 :root{
-  --bg:#f4f2ec; --panel:#ffffff; --ink:#1e2422; --muted:#6c736f; --faint:#a39d90;
+  --bg:#f4f2ec; --panel:#ffffff; --ink:#1e2422; --muted:#5f6662; --faint:#77715f;
   --line:#e3dfd5; --soft:#ece8de; --desk:#e6e0d2;
   --board:#264a3f; --board-ink:#eef3ec;
-  --accent:#e06b2f; --accent-ink:#ffffff; --accent-soft:#fbe7dc;
+  --accent:#bf531b; --accent-ink:#ffffff; --accent-soft:#fbe7dc;
   --boy:#3a6ad6; --boy-soft:#e6edfb; --boy-line:#c9d6f4; --boy-ink:#20449a;
   --girl:#d4467a; --girl-soft:#fbe6ee; --girl-line:#f0c6d6; --girl-ink:#9c2556;
   --danger:#b83a2f; --ok:#2d7a52;
@@ -219,7 +219,7 @@ body.rs-closed .rside{display:none}
 .sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px}
 .sec-h h3{margin:0}
 .muted{color:var(--muted);font-size:13.5px}
-.warn-t{color:#b8661d;font-weight:700}
+.warn-t{color:#9a4f12;font-weight:700}
 .note{color:var(--muted);font-size:13px;margin:8px 0 0;line-height:1.55}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
 .row.end{justify-content:flex-end}
@@ -255,7 +255,7 @@ body.drawer-wide::after{content:"";position:fixed;inset:0;background:rgba(25,30,
 .sx2 button.on.M{background:var(--boy);color:#fff}
 .sx2 button.on.F{background:var(--girl);color:#fff}
 .sx2.none{background:#fff1e0;box-shadow:inset 0 0 0 1px #efc48f}
-.sx2.none button{color:#b8661d}
+.sx2.none button{color:#9a4f12}
 .sex-tools{display:flex;flex-direction:column;gap:6px;font-size:13px;background:#fff1e0;border:1px solid #f1d4ae;padding:8px 10px;border-radius:10px;margin:0 0 8px}
 .sex-tools .sep{color:#e2c79f;margin:0 2px}
 .sex-tools .btn.sm{padding:4px 9px}
@@ -685,6 +685,7 @@ details.more-opt .field{margin-top:10px}
       <div class="field"><label for="prTitle">제목</label><input type="text" id="prTitle"></div>
       <div class="field"><label for="prDate">날짜·부제</label><input type="text" id="prDate"></div>
       <div class="field"><span class="lab">용지 방향 (A4)</span><div class="seg" id="prOrient"><button data-v="landscape">가로</button><button data-v="portrait">세로</button></div></div>
+      <div class="field"><span class="lab">자리표 보는 방향</span><div class="seg" id="prView"><button data-v="student">학생 쪽에서</button><button data-v="teacher">교사 쪽에서</button></div><p class="note" style="margin:4px 0 0">학생 쪽: 칠판이 위 · 교사 쪽: 칠판이 아래</p></div>
       <div class="field"><span class="lab">종이에 넣을 것</span>
         <label class="ck"><input type="checkbox" data-blk="seat"> 자리표</label>
         <label class="ck"><input type="checkbox" data-blk="roster"> 명렬표</label>
@@ -697,7 +698,6 @@ details.more-opt .field{margin-top:10px}
       <p class="note" style="margin:0">미리보기에서 칸을 <b>끌어서 옮기고</b>, 오른쪽 아래 <b>모서리를 끌어 크기</b>를 바꿔요.</p>
       <button class="btn sm" id="prAuto">처음 배치로 되돌리기</button>
       <details class="more-opt"><summary>자세한 설정</summary>
-        <div class="field"><span class="lab">자리표 보는 방향</span><div class="seg" id="prView"><button data-v="student">학생 쪽에서</button><button data-v="teacher">교사 쪽에서</button></div></div>
         <div class="field"><span class="lab">자리표에 표시</span>
           <label class="ck"><input type="checkbox" id="prNum"> 출석번호</label>
           <label class="ck"><input type="checkbox" id="prSeat"> 자리 번호</label>
@@ -1849,6 +1849,7 @@ function openPrint(){
   p.title=S.title;p.date=fmtDate(new Date());
   if(!p.memoOnDefault){p.on.memo=true;p.memoOnDefault=true;p.blocks={}}// 남길 말은 처음부터 켜 둠
   if(p.orient!=='landscape'){p.orient='landscape';p.blocks={}}// 출력 창은 늘 가로 용지로 시작
+  p.view=S.view;// 출력 방향은 지금 화면 방향으로 시작하고, 출력 창에서 학생 쪽/교사 쪽을 골라요
   $('#prTitle').value=p.title;$('#prDate').value=p.date;$('#prMemo').value=p.memo||'';
   $('#prNum').checked=p.showNum;$('#prSeat').checked=p.showSeatNo;$('#prSex').checked=p.sexColor;
   $('#prSex').closest('label').hidden=NS();

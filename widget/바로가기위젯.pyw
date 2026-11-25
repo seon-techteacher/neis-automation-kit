@@ -51,7 +51,8 @@ BTNS = [("나이스", "neis", "open", "#1b6fb5"), ("에듀파인", "edufine", "m
 # 다른 분이 만든 도구 (업무도우미 © 2026 Kang SeongHo — 비영리·출처 표시, 판매·수정본 배포는 허락 필요)
 # 키트 폴더의 «업무도우미\plus.html»(만든 분 저장소를 통째로 받은 폴더 + 좁은 패널판)이 있으면 그걸 열고, 없으면 만든 분 사이트를 연다
 WEB_LINKS = {"업무도우미": "https://pinggu5224.github.io/teachertool/"}
-LOCAL_PAGES = {"업무도우미": HERE.parent / "업무도우미" / "plus.html"}
+# 0.6.0 부터 만든 분이 화면 틀을 바꿔(왼쪽 아이콘 줄 + 홈) 예전 좁은 패널판 plus.html 은 맞지 않는다 → 만든 분 홈 index.html 을 연다 (2026-11-25)
+LOCAL_PAGES = {"업무도우미": HERE.parent / "업무도우미" / "index.html"}
 GREEN = HERE / "상벌점사이트_엔진.py"              # 학교 상벌점 사이트 (아이디·비밀번호 로그인)
 GREEN_SETUP = HERE / "상벌점사이트_설정.py"
 GREEN_INPUT = HERE / "상벌점사이트_입력.py"         # [상벌점] 입력 창이 부른다 (목록 · 학생 · 넣기)
