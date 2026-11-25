@@ -139,7 +139,7 @@ def kill_other_widgets():
         for p in psutil.process_iter(["pid", "name", "cmdline"]):
             args = p.info.get("cmdline") or []
             if p.info["pid"] not in mine and (p.info.get("name") or "").lower().startswith("python") \
-                    and any(a.endswith(("바로가기위젯.pyw", "바로가기위젯_상벌점.pyw")) for a in args[1:3]):
+                    and any(a.endswith(("바로가기위젯.pyw", "바로가기위젯_상벌점.pyw", "바로가기위젯_출결.pyw")) for a in args[1:3]):
                 p.kill()
     except Exception:
         pass
